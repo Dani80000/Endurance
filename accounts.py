@@ -16,11 +16,19 @@ def save_accounts(account):
         json.dump(account, f, indent=4)
 
 def create_account(user_id, password):
-    accounts = load_accounts
+    accounts = load_accounts()
     if user_id in accounts:
         print("User_id already exists")
         return False
     accounts[user_id] = password
     save_accounts()
     print("Account created successfully")
+    return True
+
+def authenticate_account(user_id, password):
+    accounts = load_accounts()
+    if user_id not in accounts:
+        return False
+    if accounts[user_id] != password:
+        return False
     return True
