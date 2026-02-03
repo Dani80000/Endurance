@@ -32,3 +32,9 @@ def authenticate_account(user_id, password):
     if accounts[user_id] != password:
         return False
     return True
+
+def find_account(user_id):
+    accounts = load_accounts()
+    if user_id in accounts:
+        return True
+    return False
