@@ -1,7 +1,8 @@
 #This file abstracts the secure connection to a central server
 #Cryptography is handled in this file
 from accounts import authenticate_account, find_account
-from cryptograpy_functions import *
+from cryptography_functions import *
+import json, os
 
 
 #Call this function to connect to a channel:
@@ -28,10 +29,38 @@ def connect(user_id, password, channel=None, receiver_id = None):
     if channel:
         join_channel(user_id, channel)
 
-def join_DM(id_1, id_2):
-    #TODO
-    pass
+    return True
+
+#DMs are channels with a specific naming convention as listed above
+def join_DM(user_id, receiver_id):
+    dm_channel_name = f"{user_id}_{receiver_id}"
+    return join_channel(None, dm_channel_name)
 
 def join_channel(user_id, channel_name):
-    #TODO
-    pass
+    if not os.path.exists("messages"):
+        os.makedirs("messages")
+
+    filename = f"messages/{channel_name}.json"
+
+    if os.path.exists(filename):
+        with open(filename, "r") as file:
+            return json.load(file)
+
+    return []
+
+def save_message_to_json(payload):
+    channel = payload.get("channel", "General")
+    filename = f"messages/{channel}.json"
+    
+    if os.path.exists(filename):
+        with open(filename, "r") as file:
+            history = json.load(file)
+    else:
+        history = []
+
+    history.append(payload)
+
+    with open(filename, "w") as file:
+        json.dump(history, file)
+    
+    print(f"Message archived in {filename}")
