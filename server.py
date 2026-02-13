@@ -14,7 +14,7 @@ async def handler(websocket): # Async will allow us to wait for messages without
         password = data.get("password")
         target_channel = data.get("channel") # ex: "General"
         target_dm = data.get("receiver_id")  # ex: "testUser"
-
+    
         print(f"Login attempt received for: {user_id}")
 
         if connections.connect(user_id, password, channel=target_channel, receiver_id=target_dm):
@@ -48,7 +48,9 @@ async def handler(websocket): # Async will allow us to wait for messages without
         else:
             print(f"User {user_id} failed login.")
             await websocket.send(json.dumps({"status": "error", "message": "Login Failed"}))
-    
+
+    except websockets.exceptions.InvalidMessage:
+        return
     except Exception as e:
         print(f"Error handling client: {e}")
     finally:

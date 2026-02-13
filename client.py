@@ -1,7 +1,7 @@
 from getpass import getpass
 import accounts, websockets, asyncio, json
 
-RENDER_URL = "wss://secure-chat-bs75.onrender.com/"
+RENDER_URL = "wss://secure-chat-bs75.onrender.com"
 
 def prompt_auth():
     while True:
