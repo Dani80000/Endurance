@@ -1,13 +1,30 @@
 from getpass import getpass
-import accounts
+import accounts, websockets, asyncio, json
+
+RENDER_URL = "wss://secure-chat-bs75.onrender.com/"
 
 def prompt_auth():
     while True:
         choice = input("(l)ogin or (c)reate account? ").lower()
         if choice in ("l", "c"):
             return choice
+async def chat_loop(websocket, user):
+    print(f"\nConnected to server as {user}")
+    print("Type /quit to exit\n")
+    
+    while True:
+        msg = input("> ")
+        if msg == "/quit":
+            break
+            
+        payload = {
+            "user_id": user,
+            "message": msg,
+            "channel": "General"
+        }
+        await websocket.send(json.dumps(payload))
 
-def main():
+async def main():
     print("=== Secure Chat ===")
     choice = prompt_auth()
 
@@ -19,26 +36,29 @@ def main():
         if not accounts.create_account(user, pw_hash):
             print("Account already exists.")
             return
-        print("Account created.")
+        print("Account locally created.")
 
     else:
         if not accounts.authenticate_account(user, pw):
-            print("Invalid login.")
+            print("Invalid local login.")
             return
 
-    print("\nLogged in as", user)
-    print("Local chat mode (server not implemented yet)")
-    print("Type /quit to exit\n")
-
-    history = []
-
-    while True:
-        msg = input("> ")
-        if msg == "/quit":
-            break
-        line = f'{user}: "{msg}"'
-        history.append(line)
-        print(line)
+    print("\nLocally logged in as", user)
+    print(f"Connecting to {RENDER_URL}...")
+    try:
+        async with websockets.connect(RENDER_URL) as websocket:
+            login_data = {
+                "user_id": user,
+                "password": pw,
+                "channel": "General"
+            }
+            await websocket.send(json.dumps(login_data))
+            await chat_loop(websocket, user)
+    except Exception as e:
+        print(f"Connection Error: {e}")
 
 if __name__ == "__main__":
-    main()
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
