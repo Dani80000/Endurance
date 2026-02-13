@@ -3,6 +3,8 @@ Dani Dimovski, Robby Loeffler, Adam Secrest
 Installations Required:
 python3 -m pip install cryptography
 pip install websockets
+pip install PySide6 websockets
+
 
 # Secure-Chat
 Project to establish a secure messaging channel between 2 users
