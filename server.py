@@ -1,5 +1,5 @@
 # This script handles server related operations
-import asyncio,connections, websockets, json
+import asyncio,connections, websockets, json, os
 
 current_clients = set() # Keeps track of connected clients so messages are broadcasted to them TODO: Add safe removal when a client disconnects during send
 
@@ -56,8 +56,9 @@ async def handler(websocket): # Async will allow us to wait for messages without
             current_clients.remove(websocket)
 
 async def main():
-    async with websockets.serve(handler, "localhost", 8765):
-        print("The server is running on ws://localhost:8765")
+    port = int(os.environ.get("PORT", 8765))
+    async with websockets.serve(handler, "0.0.0.0", port):
+        print(f"The server is running on port {port}")
         await asyncio.Future()  # Run forever
 
 #safeguard to run the file directly vs importing
