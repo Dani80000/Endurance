@@ -5,9 +5,9 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 app = FastAPI()
 
-ACCOUNTS_FILE = "accounts.json"
-STATUS_FILE = "status.json"
-MESSAGES_DIR = "messages"
+ACCOUNTS_FILE = "/var/data/accounts.json"
+STATUS_FILE = "/var/data/status.json"
+MESSAGES_DIR = "/var/data/messages"
 
 os.makedirs(MESSAGES_DIR, exist_ok=True)
 
