@@ -1,5 +1,7 @@
 from getpass import getpass
-import accounts
+import accounts, websockets, asyncio, json
+
+RENDER_URL = "wss://secure-chat-bs75.onrender.com" 
 
 def prompt_auth():
     while True:
@@ -7,38 +9,88 @@ def prompt_auth():
         if choice in ("l", "c"):
             return choice
 
-def main():
-    print("=== Secure Chat ===")
+async def chat_loop(websocket, user):
+    print(f"\nConnected to server as {user}")
+    print("Type /quit to exit\n")
+    
+    async def listen_for_messages():
+        try:
+            async for message in websocket:
+                data = json.loads(message)
+                sender = data.get("sender", "SYSTEM")
+                content = data.get("message")
+                
+                if sender != user:
+                    print(f"\r[{sender}]: {content}\n> ", end="")
+        except websockets.exceptions.ConnectionClosed:
+            print("\nServer connection closed")
+
+    listener_task = asyncio.create_task(listen_for_messages())
+
+    try:
+        while True:
+            msg = await asyncio.to_thread(input, "> ")
+            if msg == "/quit":
+                break
+
+            if not msg.strip():
+                continue
+
+            payload = {
+                "user_id": user,
+                "message": msg,
+                "channel": "General"
+            }
+            await websocket.send(json.dumps(payload))
+    finally:
+        listener_task.cancel()
+
+async def main():
+    print("=== Secure Chat Client ===")
     choice = prompt_auth()
 
-    user = input("Username: ").strip()
+    user = input("Username: ").strip().lower()
     pw = getpass("Password: ")
 
-    if choice == "c":
-        pw_hash = accounts.hash_password(pw)
-        if not accounts.create_account(user, pw_hash):
-            print("Account already exists.")
-            return
-        print("Account created.")
+    print(f"\nConnecting to {RENDER_URL}...")
+    try:
+        async with websockets.connect(RENDER_URL) as websocket:
+            
+            action_type = "login" if choice == "l" else "create"
 
-    else:
-        if not accounts.authenticate_account(user, pw):
-            print("Invalid login.")
-            return
+            auth_data = {
+                "action": action_type,
+                "user_id": user,
+                "password": pw,
+                "channel": "General"
+            }
+            await websocket.send(json.dumps(auth_data))
+            
+            response_json = await websocket.recv()
+            response = json.loads(response_json)
+            
+            print(f"[SYSTEM]: {response.get('message')}")
+            
+            if response.get("status") == "success":
+                if choice == "l":
+                    history = response.get("history", [])
+                    if history:
+                        print("\n--- Recent Messages ---")
+                        for msg in history:
+                            print(f"[{msg.get('sender', 'User')}]: {msg.get('message')}")
+                        print("-----------------------\n")
+                    
+                    await chat_loop(websocket, user)
+                else:
+                    print("Account created successfully on Server")
+            else:
+                print("Connection closed due to error")
 
-    print("\nLogged in as", user)
-    print("Local chat mode (server not implemented yet)")
-    print("Type /quit to exit\n")
-
-    history = []
-
-    while True:
-        msg = input("> ")
-        if msg == "/quit":
-            break
-        line = f'{user}: "{msg}"'
-        history.append(line)
-        print(line)
+    except Exception as e:
+        print(f"Connection Error: {e}")
 
 if __name__ == "__main__":
-    main()
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
