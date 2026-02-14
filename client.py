@@ -49,7 +49,7 @@ async def main():
     print("=== Secure Chat Client ===")
     choice = prompt_auth()
 
-    user = input("Username: ").strip()
+    user = input("Username: ").strip().lower()
     pw = getpass("Password: ")
 
     if choice == "c":

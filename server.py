@@ -10,7 +10,7 @@ async def handler(websocket): # Async will allow us to wait for messages without
         message = await websocket.recv() 
         data = json.loads(message)
         
-        user_id = data.get("user_id")
+        user_id = data.get("user_id").strip().lower()
         password = data.get("password")
         target_channel = data.get("channel") # ex: "General"
         target_dm = data.get("receiver_id")  # ex: "testUser"
