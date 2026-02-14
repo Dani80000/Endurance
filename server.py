@@ -1,8 +1,7 @@
 # server.py
-import os
-import json
+import os, uvicorn, json
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-import uvicorn
+
 
 app = FastAPI()
 
@@ -76,6 +75,14 @@ async def websocket_endpoint(websocket: WebSocket):
                 else:
                     active_connections[user] = websocket
                     current_user = user
+
+                    default_room = "main"
+                    room_file = os.path.join(MESSAGES_DIR, f"{default_room}.json")
+
+                    if not os.path.exists(room_file):
+                        save_json(room_file, [])
+                    user_rooms[user] = default_room
+                    messages = load_json(room_file)
 
                     await websocket.send_json({
                         "success": True,
