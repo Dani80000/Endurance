@@ -15,6 +15,10 @@ async def handler(websocket): # Async will allow us to wait for messages without
         password = data.get("password")
         target_channel = data.get("channel") # ex: "General"
         target_dm = data.get("receiver_id")  # ex: "testUser"
+
+        if not user_id:
+            await websocket.send(json.dumps({"status": "error", "message": "User ID cannot be empty"}))
+            return
     
         if action == "create":
             print(f"Creating account for: {user_id}")
