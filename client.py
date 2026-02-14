@@ -1,7 +1,6 @@
 from getpass import getpass
 import accounts, websockets, asyncio, json
 
-# NOTE: No "/ws" at the end because FastAPI is listening on "/"
 RENDER_URL = "wss://secure-chat-bs75.onrender.com" 
 
 def prompt_auth():
@@ -74,7 +73,6 @@ async def main():
             
             if response.get("status") == "success":
                 if choice == "l":
-                    # PRINT HISTORY HERE
                     history = response.get("history", [])
                     if history:
                         print("\n--- Recent Messages ---")

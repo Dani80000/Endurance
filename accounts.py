@@ -5,7 +5,6 @@ import hashlib
 ACCOUNTS_FILE = "accounts.json"
 
 def hash_password(password):
-    # This turns a password into a secure hash
     return hashlib.sha256(password.encode()).hexdigest()
 
 def load_accounts():
@@ -29,7 +28,6 @@ def create_account(user_id, password_hash):
     if user_id in accounts:
         return False
     
-    # Store the hash exactly as the server sent it
     accounts[user_id] = password_hash
     save_accounts(accounts)
     return True
@@ -42,10 +40,8 @@ def authenticate_account(user_id, password_plaintext):
     if user_id not in accounts:
         return False
     
-    # Hash the input to see if it matches the stored version
     input_hash = hash_password(password_plaintext)
     
-    # Check against the stored hash
     if accounts[user_id] == input_hash:
         return True
         

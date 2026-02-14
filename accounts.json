@@ -1,13 +1,3 @@
 {
-    "testUser": "scrypt$j0dMZMgjBjDcByMWksxC8A==$3YfYuZXCpMxal0nkjJRr/eHTjx4eJjGQcZikgt8HDT0=",
-    "james": "scrypt$SzRXeGE/491I7euRuQwNXA==$gwrcKICyAUqPDseT8DI9C6HRvQXJ/19AjTkGRoiRl2M=",
-    "logan": "scrypt$ZK6SzmY+zaqByLlSO7Kqfw==$rSvp7EPa/53aJ4CW55nEgD3GdryqtWfUub3XU+VVlL8=",
-    "paul": "scrypt$V+xXfe88AcGGtdhrPI+vog==$vCAuHXbnTNQ1uoF3k5tU74PjMqSmMGDnnlB3IX+/ayM=",
-    "lake": "scrypt$Dgshe7L/tuaIE6JYTAiE6A==$0B+i3U9vghXXbm2wJ8mIje7FO8ws5AF2Zi/OJ7XYp8c=",
-    "jacob": "scrypt$UJSVworNDyEG7WP71IZDaw==$+igzkTd4AlzxcHYpNdy/kCVQRSS6sPRvzMjaVgCVs2w=",
-    "jameson": "scrypt$ZE4bmrKOhDrJa1EuODFaNQ==$rHEjrgrsi6xJuTa9GD7KBidKYNpZBJOHU1B6OyPhIcY=",
-    "jamesons": "scrypt$yqytt1MmA8VuDE3w14c9Ag==$oFg46ECSDUp3PBYpA3L5ElGx/M4sc/ags3fz64VjuWs=",
-    "blake": "scrypt$TpFefYDQQxNyiSOHLDAjGA==$Uj7NZaT344EkMrgLU9rwydOnXZIWUDFS3lmKuQ4u6tY=",
-    "gabriel": "scrypt$FQbCJUMh/W2XMtGV2KYILA==$Cv6xLdAwDkpRzMFyQfJKOX5v25kRzrSvd1c4mcraumI=",
-    "adam": "scrypt$jKhkosGieuwEz0/Iqf37/Q==$l4iqZXDhCWM/ll4CxD4No8tq+aadpNfWujEytVYLIuk="
+    "testUser": "scrypt$j0dMZMgjBjDcByMWksxC8A==$3YfYuZXCpMxal0nkjJRr/eHTjx4eJjGQcZikgt8HDT0="
 }

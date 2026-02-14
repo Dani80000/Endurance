@@ -3,13 +3,11 @@ import os
 import accounts
 
 def connect(user_id, password, channel="General", receiver_id=None):
-    # Passes the plain password to accounts.py for verification
     if accounts.authenticate_account(user_id, password):
         return True
     return False
 
 def save_message_to_json(payload):
-    # Creates folder if Render wiped it
     if not os.path.exists("messages"):
         os.makedirs("messages")
 
