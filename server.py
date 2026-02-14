@@ -1,82 +1,146 @@
-# This script handles server related operations
-import asyncio,connections, websockets, json, os, accounts
+# server.py
+import os
+import json
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import uvicorn
 
-current_clients = set() # Keeps track of connected clients so messages are broadcasted to them TODO: Add safe removal when a client disconnects during send
+app = FastAPI()
 
-async def handler(websocket): # Async will allow us to wait for messages without blocking
-    print("New client connected. Waiting for login...")
-    
-    try: # This is here in order to void errors from getting bad data to prevent any failures TODO:(although this should be around things that can fail only)
-        try:
-            message = await websocket.recv() 
-        except websockets.exceptions.InvalidMessage:
-            return     
-        data = json.loads(message)
-        
-        action = data.get("action", "login")
-        user_id = data.get("user_id").strip().lower()
-        password = data.get("password")
-        target_channel = data.get("channel") # ex: "General"
-        target_dm = data.get("receiver_id")  # ex: "testUser"
-    
-        if action == "create":
-            print(f"Creating account for: {user_id}")
-            pw_hash = accounts.hash_password(password)
-            if accounts.create_account(user_id, pw_hash):
-                await websocket.send(json.dumps({"status": "success", "message": "Account created on server"}))
-            else:
-                await websocket.send(json.dumps({"status": "error", "message": "Account already exists"}))
-            return
+ACCOUNTS_FILE = "accounts.json"
+STATUS_FILE = "status.json"
+MESSAGES_DIR = "messages"
 
-        print(f"Login attempt received for: {user_id}")
-        if connections.connect(user_id, password, channel=target_channel, receiver_id=target_dm):
-            current_clients.add(websocket)
-            print(f"User {user_id} successfully logged in!")
-            
-            await websocket.send(json.dumps({"status": "success", "message": "Connected securely."}))
-            
-            # load history
-            history = connections.join_channel(user_id, target_channel or "General")
-            # send history
-            for msg in history:      
-                await websocket.send(json.dumps(msg))     
+os.makedirs(MESSAGES_DIR, exist_ok=True)
 
-            # Keep the connection open so they can chat
-            async for msg in websocket:
-                try:
-                    payload = json.loads(msg)
-                    payload["sender"] = user_id 
-                
-                    try:
-                      connections.save_message_to_json(payload) 
-                    except Exception as e:
-                        print(f"Error saving message: {e}")
+def load_json(path):
+    if not os.path.exists(path):
+        return {}
+    with open(path, "r") as f:
+        return json.load(f)
 
-                    for client in current_clients:
-                        if client != websocket:
-                            await client.send(json.dumps(payload))
-                
-                except json.JSONDecodeError:
-                    print(f"Received non-JSON message from {user_id}")
-                
-        else:
-            print(f"User {user_id} failed login.")
-            await websocket.send(json.dumps({"status": "error", "message": "Login Failed"}))
+def save_json(path, data):
+    with open(path, "w") as f:
+        json.dump(data, f, indent=4)
 
-    except websockets.exceptions.InvalidMessage:
-        return
-    except Exception as e:
-        print(f"Error handling client: {e}")
+active_connections = {}   # user -> websocket
+user_rooms = {}           # user -> room
+
+@app.get("/")
+async def root():
+    return {"status": "alive"}
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    current_user = None
+
+    try:
+        while True:
+            packet = await websocket.receive_json()
+
+            user = packet.get("userID")
+            pw_hash = packet.get("passwordHash")
+            flag = packet.get("flag")
+            data = packet.get("data")
+
+            accounts = load_json(ACCOUNTS_FILE)
+
+            # --- CREATE ---
+            if flag == "create":
+                if user in accounts:
+                    await websocket.send_json({
+                        "success": False,
+                        "message": "Username already exists."
+                    })
+                else:
+                    accounts[user] = pw_hash
+                    save_json(ACCOUNTS_FILE, accounts)
+
+                    await websocket.send_json({
+                        "success": True,
+                        "message": "Account created."
+                    })
+
+            # --- LOGIN ---
+            elif flag == "login":
+                if user not in accounts:
+                    await websocket.send_json({
+                        "success": False,
+                        "message": "User does not exist."
+                    })
+                elif accounts[user] != pw_hash:
+                    await websocket.send_json({
+                        "success": False,
+                        "message": "Incorrect password."
+                    })
+                else:
+                    active_connections[user] = websocket
+                    current_user = user
+
+                    await websocket.send_json({
+                        "success": True,
+                        "message": "Login successful."
+                    })
+
+            # --- CONNECT ROOM ---
+            elif flag == "connect":
+                room = data
+                room_file = os.path.join(MESSAGES_DIR, f"{room}.json")
+
+                if not os.path.exists(room_file):
+                    save_json(room_file, [])
+
+                user_rooms[user] = room
+
+                messages = load_json(room_file)
+
+                await websocket.send_json({
+                    "success": True,
+                    "message": f"Connected to {room}",
+                    "data": messages
+                })
+
+            # --- MESSAGE ---
+            elif flag == "message":
+                room = user_rooms.get(user)
+
+                if not room:
+                    await websocket.send_json({
+                        "success": False,
+                        "message": "Not connected to a room."
+                    })
+                    continue
+
+                room_file = os.path.join(MESSAGES_DIR, f"{room}.json")
+                messages = load_json(room_file)
+
+                msg_obj = {
+                    "user": user,
+                    "message": data
+                }
+
+                messages.append(msg_obj)
+                save_json(room_file, messages)
+
+                # Broadcast
+                for u, ws in active_connections.items():
+                    if user_rooms.get(u) == room and u != user:
+                        await ws.send_json({
+                            "flag": "message",
+                            "data": msg_obj
+                        })
+
+            # --- DISCONNECT ---
+            elif flag == "disconnect":
+                break
+
+    except WebSocketDisconnect:
+        pass
     finally:
-        if websocket in current_clients:
-            current_clients.remove(websocket)
+        if current_user:
+            active_connections.pop(current_user, None)
+            user_rooms.pop(current_user, None)
 
-async def main():
-    port = int(os.environ.get("PORT", 8765))
-    async with websockets.serve(handler, "0.0.0.0", port):
-        print(f"The server is running on port {port}")
-        await asyncio.Future()  # Run forever
-
-#safeguard to run the file directly vs importing
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
