@@ -12,11 +12,15 @@ MESSAGES_DIR = "/var/data/messages"
 
 os.makedirs(MESSAGES_DIR, exist_ok=True)
 
-def load_json(path):
+def load_json(path, default):
     if not os.path.exists(path):
-        return {}
-    with open(path, "r") as f:
-        return json.load(f)
+        return default
+    try:
+        with open(path, "r") as f:
+            return json.load(f)
+    except:
+        return default
+
 
 def save_json(path, data):
     with open(path, "w") as f:
@@ -43,7 +47,7 @@ async def websocket_endpoint(websocket: WebSocket):
             flag = packet.get("flag")
             data = packet.get("data")
 
-            accounts = load_json(ACCOUNTS_FILE)
+            accounts = load_json(ACCOUNTS_FILE, {})
 
             # --- CREATE ---
             if flag == "create":
@@ -92,7 +96,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 user_rooms[user] = room
 
-                messages = load_json(room_file)
+                messages = load_json(room_file, [])
 
                 await websocket.send_json({
                     "success": True,
@@ -100,35 +104,37 @@ async def websocket_endpoint(websocket: WebSocket):
                     "data": messages
                 })
 
-            # --- MESSAGE ---
             elif flag == "message":
-                room = user_rooms.get(user)
+                try:
+                    room = user_rooms.get(user)
 
-                if not room:
-                    await websocket.send_json({
-                        "success": False,
-                        "message": "Not connected to a room."
-                    })
-                    continue
-
-                room_file = os.path.join(MESSAGES_DIR, f"{room}.json")
-                messages = load_json(room_file)
-
-                msg_obj = {
-                    "user": user,
-                    "message": data
-                }
-
-                messages.append(msg_obj)
-                save_json(room_file, messages)
-
-                # Broadcast
-                for u, ws in active_connections.items():
-                    if user_rooms.get(u) == room and u != user:
-                        await ws.send_json({
-                            "flag": "message",
-                            "data": msg_obj
+                    if not room:
+                        await websocket.send_json({
+                            "success": False,
+                            "message": "Not connected to a room."
                         })
+                        continue
+
+                    room_file = os.path.join(MESSAGES_DIR, f"{room}.json")
+                    messages = load_json(room_file, [])
+
+                    msg_obj = {
+                        "user": user,
+                        "message": data
+                    }
+
+                    messages.append(msg_obj)
+                    save_json(room_file, messages)
+
+                    for u, ws in active_connections.items():
+                        if user_rooms.get(u) == room and u != user:
+                            await ws.send_json({
+                                "flag": "message",
+                                "data": msg_obj
+                            })
+
+                except Exception as e:
+                    print("MESSAGE ERROR:", e)
 
             # --- DISCONNECT ---
             elif flag == "disconnect":
