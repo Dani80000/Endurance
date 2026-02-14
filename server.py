@@ -86,7 +86,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     if not os.path.exists(room_file):
                         save_json(room_file, [])
                     user_rooms[user] = default_room
-                    messages = load_json(room_file)
+                    messages = load_json(room_file, [])
 
                     await websocket.send_json({
                         "success": True,
