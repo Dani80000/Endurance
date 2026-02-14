@@ -50,6 +50,10 @@ def join_channel(user_id, channel_name):
 
 def save_message_to_json(payload):
     channel = payload.get("channel", "General")
+
+    if not os.path.exists("messages"):
+           os.makedirs("messages")
+
     filename = f"messages/{channel}.json"
     
     if os.path.exists(filename):

@@ -7,7 +7,10 @@ async def handler(websocket): # Async will allow us to wait for messages without
     print("New client connected. Waiting for login...")
     
     try: # This is here in order to void errors from getting bad data to prevent any failures TODO:(although this should be around things that can fail only)
-        message = await websocket.recv() 
+        try:
+            message = await websocket.recv() 
+        except websockets.exceptions.InvalidMessage:
+            return     
         data = json.loads(message)
         
         action = data.get("action", "login")
@@ -42,8 +45,11 @@ async def handler(websocket): # Async will allow us to wait for messages without
                 try:
                     payload = json.loads(msg)
                     payload["sender"] = user_id 
-                    
-                    connections.save_message_to_json(payload) 
+                
+                    try:
+                      connections.save_message_to_json(payload) 
+                    except Exception as e:
+                        print(f"Error saving message: {e}")
 
                     for client in current_clients:
                         if client != websocket:
