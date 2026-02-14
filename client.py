@@ -1,14 +1,15 @@
 from getpass import getpass
 import accounts, websockets, asyncio, json
 
-RENDER_URL = "wss://secure-chat-bs75.onrender.com"
+# NOTE: No "/ws" at the end because FastAPI is listening on "/"
+RENDER_URL = "wss://secure-chat-bs75.onrender.com" 
 
 def prompt_auth():
     while True:
         choice = input("(l)ogin or (c)reate account? ").lower()
         if choice in ("l", "c"):
             return choice
-        
+
 async def chat_loop(websocket, user):
     print(f"\nConnected to server as {user}")
     print("Type /quit to exit\n")
@@ -33,21 +34,20 @@ async def chat_loop(websocket, user):
             if msg == "/quit":
                 break
 
-            if not msg.strip(): #for empty messages
+            if not msg.strip():
                 continue
 
-        payload = {
-            "user_id": user,
-            "message": msg,
-            "channel": "General"
-        }
-        await websocket.send(json.dumps(payload))
+            payload = {
+                "user_id": user,
+                "message": msg,
+                "channel": "General"
+            }
+            await websocket.send(json.dumps(payload))
     finally:
         listener_task.cancel()
 
 async def main():
     print("=== Secure Chat Client ===")
-    
     choice = prompt_auth()
 
     user = input("Username: ").strip().lower()
@@ -57,9 +57,7 @@ async def main():
     try:
         async with websockets.connect(RENDER_URL) as websocket:
             
-            action_type = "login"
-            if choice == "c":
-                action_type = "create"
+            action_type = "login" if choice == "l" else "create"
 
             auth_data = {
                 "action": action_type,
@@ -76,6 +74,14 @@ async def main():
             
             if response.get("status") == "success":
                 if choice == "l":
+                    # PRINT HISTORY HERE
+                    history = response.get("history", [])
+                    if history:
+                        print("\n--- Recent Messages ---")
+                        for msg in history:
+                            print(f"[{msg.get('sender', 'User')}]: {msg.get('message')}")
+                        print("-----------------------\n")
+                    
                     await chat_loop(websocket, user)
                 else:
                     print("Account created successfully on Server")

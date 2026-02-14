@@ -1,87 +1,89 @@
-# This script handles server related operations
-import asyncio,connections, websockets, json, os, accounts, http
+import os, json
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import uvicorn
+import accounts  # Make sure you have your accounts.py file next to this
+import connections # Make sure connections.py is also there
 
-current_clients = set() # Keeps track of connected clients so messages are broadcasted to them TODO: Add safe removal when a client disconnects during send
+app = FastAPI()
 
-async def handler(websocket): # Async will allow us to wait for messages without blocking
-    print("New client connected. Waiting for login...")
+# Create messages directory if it doesn't exist
+if not os.path.exists("messages"):
+    os.makedirs("messages")
+
+active_connections = set()
+
+@app.get("/")
+async def get():
+    return {"status": "Live and waiting for connections"}
+
+@app.websocket("/")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    print("New client connected.")
     
-    try: # This is here in order to void errors from getting bad data to prevent any failures TODO:(although this should be around things that can fail only)
-        message = await websocket.recv() 
-        data = json.loads(message)
+    try:
+        # 1. Receive Auth Packet
+        data = await websocket.receive_json()
         
         action = data.get("action", "login")
         user_id = data.get("user_id", "").strip().lower()
         password = data.get("password")
-        target_channel = data.get("channel") # ex: "General"
-        target_dm = data.get("receiver_id")  # ex: "testUser"
-
-        if not user_id:
-            await websocket.send(json.dumps({"status": "error", "message": "User ID cannot be empty"}))
-            return
-    
+        
+        # 2. Handle Create
         if action == "create":
             print(f"Creating account for: {user_id}")
             pw_hash = accounts.hash_password(password)
             if accounts.create_account(user_id, pw_hash):
-                await websocket.send(json.dumps({"status": "success", "message": "Account created on server"}))
+                await websocket.send_json({"status": "success", "message": "Account created on server."})
             else:
-                await websocket.send(json.dumps({"status": "error", "message": "Account already exists"}))
-            return
+                await websocket.send_json({"status": "error", "message": "Account already exists."})
+            return # Close connection after create
 
-        print(f"Login attempt received for: {user_id}")
-        if connections.connect(user_id, password, channel=target_channel, receiver_id=target_dm):
-            current_clients.add(websocket)
-            print(f"User {user_id} successfully logged in!")
+        # 3. Handle Login
+        print(f"Login attempt: {user_id}")
+        if connections.connect(user_id, password):
+            active_connections.add(websocket)
             
-            await websocket.send(json.dumps({"status": "success", "message": "Connected securely."}))
+            # Load History
+            history = connections.join_channel(user_id, "General")
             
-            # load history
-            history = connections.join_channel(user_id, target_channel or "General")
-            # send history
-            for msg in history:      
-                await websocket.send(json.dumps(msg))     
+            # Send Success + History in one packet
+            await websocket.send_json({
+                "status": "success", 
+                "message": "Connected securely.",
+                "history": history # Sending history right here
+            })
+            
+            # Broadcast Join
+            for conn in active_connections:
+                if conn != websocket:
+                    await conn.send_json({"sender": "SYSTEM", "message": f"{user_id} joined the chat."})
 
-            # Keep the connection open so they can chat
-            async for msg in websocket:
-                payload = json.loads(msg)
-                payload["sender"] = user_id 
-                
-                try:
-                      connections.save_message_to_json(payload) 
-                except Exception as e:
-                    print(f"Error saving message: {e}")
-
-                for client in current_clients:
-                    if client != websocket:
-                        await client.send(json.dumps(payload))
-                                
-        else:
-            print(f"User {user_id} failed login.")
+            # 4. Chat Loop
             try:
-                await websocket.send(json.dumps({"status": "error", "message": "Login Failed"}))
-            except: pass
+                while True:
+                    payload = await websocket.receive_json()
+                    payload["sender"] = user_id
+                    
+                    # Save Message
+                    try:
+                        connections.save_message_to_json(payload)
+                    except: pass
+                    
+                    # Broadcast
+                    for conn in active_connections:
+                        if conn != websocket:
+                            await conn.send_json(payload)
+                            
+            except WebSocketDisconnect:
+                print(f"{user_id} disconnected")
+                active_connections.remove(websocket)
+        else:
+            await websocket.send_json({"status": "error", "message": "Login Failed"})
 
-    except websockets.exceptions.InvalidMessage:
-        return
     except Exception as e:
-        print(f"Error handling client: {e}")
-    finally:
-        if websocket in current_clients:
-            current_clients.remove(websocket)
-
-
-def health_check(connection, request):
-    if "upgrade" not in request.headers.get("Upgrade", "").lower():
-        return connection.respond(http.HTTPStatus.OK, "OK\n")
-    return None
-    
-
-async def main():
-    port = int(os.environ.get("PORT", 8765))
-    async with websockets.serve(handler, "0.0.0.0", port, process_request=health_check):
-        print(f"The server is running on port {port}")
-        await asyncio.Future()  # Run forever
+        print(f"Error: {e}")
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
