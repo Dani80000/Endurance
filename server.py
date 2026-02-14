@@ -1,82 +1,23 @@
-# This script handles server related operations
-import asyncio,connections, websockets, json, os, accounts
+# server.py
+import asyncio
+import websockets
+import os
 
-current_clients = set() # Keeps track of connected clients so messages are broadcasted to them TODO: Add safe removal when a client disconnects during send
+async def handler(websocket):
+    async for message in websocket:
+        print(f"Received: {message}")
 
-async def handler(websocket): # Async will allow us to wait for messages without blocking
-    print("New client connected. Waiting for login...")
-    
-    try: # This is here in order to void errors from getting bad data to prevent any failures TODO:(although this should be around things that can fail only)
-        try:
-            message = await websocket.recv() 
-        except websockets.exceptions.InvalidMessage:
-            return     
-        data = json.loads(message)
-        
-        action = data.get("action", "login")
-        user_id = data.get("user_id").strip().lower()
-        password = data.get("password")
-        target_channel = data.get("channel") # ex: "General"
-        target_dm = data.get("receiver_id")  # ex: "testUser"
-    
-        if action == "create":
-            print(f"Creating account for: {user_id}")
-            pw_hash = accounts.hash_password(password)
-            if accounts.create_account(user_id, pw_hash):
-                await websocket.send(json.dumps({"status": "success", "message": "Account created on server"}))
-            else:
-                await websocket.send(json.dumps({"status": "error", "message": "Account already exists"}))
-            return
+        # Capitalize message
+        response = message.upper()
 
-        print(f"Login attempt received for: {user_id}")
-        if connections.connect(user_id, password, channel=target_channel, receiver_id=target_dm):
-            current_clients.add(websocket)
-            print(f"User {user_id} successfully logged in!")
-            
-            await websocket.send(json.dumps({"status": "success", "message": "Connected securely."}))
-            
-            # load history
-            history = connections.join_channel(user_id, target_channel or "General")
-            # send history
-            for msg in history:      
-                await websocket.send(json.dumps(msg))     
-
-            # Keep the connection open so they can chat
-            async for msg in websocket:
-                try:
-                    payload = json.loads(msg)
-                    payload["sender"] = user_id 
-                
-                    try:
-                      connections.save_message_to_json(payload) 
-                    except Exception as e:
-                        print(f"Error saving message: {e}")
-
-                    for client in current_clients:
-                        if client != websocket:
-                            await client.send(json.dumps(payload))
-                
-                except json.JSONDecodeError:
-                    print(f"Received non-JSON message from {user_id}")
-                
-        else:
-            print(f"User {user_id} failed login.")
-            await websocket.send(json.dumps({"status": "error", "message": "Login Failed"}))
-
-    except websockets.exceptions.InvalidMessage:
-        return
-    except Exception as e:
-        print(f"Error handling client: {e}")
-    finally:
-        if websocket in current_clients:
-            current_clients.remove(websocket)
+        await websocket.send(response)
 
 async def main():
-    port = int(os.environ.get("PORT", 8765))
+    print("Starting WebSocket server...")
+    port = int(os.environ.get("PORT", 10000))
+
     async with websockets.serve(handler, "0.0.0.0", port):
-        print(f"The server is running on port {port}")
         await asyncio.Future()  # Run forever
 
-#safeguard to run the file directly vs importing
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    asyncio.run(main())
