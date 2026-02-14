@@ -23,7 +23,7 @@ def connect(user_id, password, channel=None, receiver_id = None):
             print("Invalid Receiver ID")
             return False
         else:
-            sortedID = [user_id, receiver_id].sorted()
+            sortedID = sorted([user_id, receiver_id])
             join_DM(sortedID[0], sortedID[1]) #ensures recall of same chat even if receiver initializes
     
     if channel:

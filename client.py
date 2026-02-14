@@ -8,24 +8,45 @@ def prompt_auth():
         choice = input("(l)ogin or (c)reate account? ").lower()
         if choice in ("l", "c"):
             return choice
+        
 async def chat_loop(websocket, user):
     print(f"\nConnected to server as {user}")
     print("Type /quit to exit\n")
     
-    while True:
-        msg = input("> ")
-        if msg == "/quit":
-            break
-            
+    async def listen_for_messages():
+        try:
+            async for message in websocket:
+                data = json.loads(message)
+                sender = data.get("sender", "SYSTEM")
+                content = data.get("message")
+                
+                if sender != user:
+                    print(f"\r[{sender}]: {content}\n> ", end="")
+        except websockets.exceptions.ConnectionClosed:
+            print("\nServer connection closed")
+
+    listener_task = asyncio.create_task(listen_for_messages())
+
+    try:
+        while True:
+            msg = await asyncio.to_thread(input, "> ")
+            if msg == "/quit":
+                break
+
+            if not msg.strip(): #for empty messages
+                continue
+
         payload = {
             "user_id": user,
             "message": msg,
             "channel": "General"
         }
         await websocket.send(json.dumps(payload))
+    finally:
+        listener_task.cancel()
 
 async def main():
-    print("=== Secure Chat ===")
+    print("=== Secure Chat Client ===")
     choice = prompt_auth()
 
     user = input("Username: ").strip()
