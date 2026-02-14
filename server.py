@@ -1,5 +1,5 @@
 # This script handles server related operations
-import asyncio,connections, websockets, json, os
+import asyncio,connections, websockets, json, os, accounts
 
 current_clients = set() # Keeps track of connected clients so messages are broadcasted to them TODO: Add safe removal when a client disconnects during send
 
@@ -10,15 +10,22 @@ async def handler(websocket): # Async will allow us to wait for messages without
         message = await websocket.recv() 
         data = json.loads(message)
         
+        action = data.get("action", "login")
         user_id = data.get("user_id").strip().lower()
         password = data.get("password")
         target_channel = data.get("channel") # ex: "General"
         target_dm = data.get("receiver_id")  # ex: "testUser"
     
-        print(f"Login attempt received for: {user_id}")
+        if action == "create":
+            pw_hash = accounts.hash_password(password)
+            if accounts.create_account(user_id, pw_hash):
+                await websocket.send(json.dumps({"status": "success", "message": "Account created on server"}))
+            else:
+                await websocket.send(json.dumps({"status": "error", "message": "Account exists on server"}))
+            return
 
+        print(f"Login attempt received for: {user_id}")
         if connections.connect(user_id, password, channel=target_channel, receiver_id=target_dm):
-            
             current_clients.add(websocket)
             print(f"User {user_id} successfully logged in!")
             
