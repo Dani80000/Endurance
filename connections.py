@@ -2,7 +2,7 @@
 import asyncio
 import websockets
 
-RENDER_URL = "wss://secure-chat-bs75.onrender.com"
+RENDER_URL = "wss://secure-chat-bs75.onrender.com/ws"
 
 async def send_message(message: str) -> str:
     async with websockets.connect(RENDER_URL) as websocket:
