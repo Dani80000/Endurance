@@ -140,3 +140,7 @@ async def websocket_endpoint(websocket: WebSocket):
         if current_user:
             active_connections.pop(current_user, None)
             user_rooms.pop(current_user, None)
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
