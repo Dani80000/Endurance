@@ -47,34 +47,41 @@ async def chat_loop(websocket, user):
 
 async def main():
     print("=== Secure Chat Client ===")
+    
     choice = prompt_auth()
 
     user = input("Username: ").strip().lower()
     pw = getpass("Password: ")
 
-    if choice == "c":
-        pw_hash = accounts.hash_password(pw)
-        if not accounts.create_account(user, pw_hash):
-            print("Account already exists.")
-            return
-        print("Account locally created.")
-
-    else:
-        if not accounts.authenticate_account(user, pw):
-            print("Invalid local login.")
-            return
-
-    print("\nLocally logged in as", user)
-    print(f"Connecting to {RENDER_URL}...")
+    print(f"\nConnecting to {RENDER_URL}...")
     try:
         async with websockets.connect(RENDER_URL) as websocket:
-            login_data = {
+            
+            action_type = "login"
+            if choice == "c":
+                action_type = "create"
+
+            auth_data = {
+                "action": action_type,
                 "user_id": user,
                 "password": pw,
                 "channel": "General"
             }
-            await websocket.send(json.dumps(login_data))
-            await chat_loop(websocket, user)
+            await websocket.send(json.dumps(auth_data))
+            
+            response_json = await websocket.recv()
+            response = json.loads(response_json)
+            
+            print(f"[SYSTEM]: {response.get('message')}")
+            
+            if response.get("status") == "success":
+                if choice == "l":
+                    await chat_loop(websocket, user)
+                else:
+                    print("Account created successfully on Server")
+            else:
+                print("Connection closed due to error")
+
     except Exception as e:
         print(f"Connection Error: {e}")
 

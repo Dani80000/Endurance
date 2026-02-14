@@ -20,11 +20,12 @@ async def handler(websocket): # Async will allow us to wait for messages without
         target_dm = data.get("receiver_id")  # ex: "testUser"
     
         if action == "create":
+            print(f"Creating account for: {user_id}")
             pw_hash = accounts.hash_password(password)
             if accounts.create_account(user_id, pw_hash):
                 await websocket.send(json.dumps({"status": "success", "message": "Account created on server"}))
             else:
-                await websocket.send(json.dumps({"status": "error", "message": "Account exists on server"}))
+                await websocket.send(json.dumps({"status": "error", "message": "Account already exists"}))
             return
 
         print(f"Login attempt received for: {user_id}")
