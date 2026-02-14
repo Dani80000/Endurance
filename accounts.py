@@ -2,11 +2,10 @@ import json
 import os
 import hashlib
 
-# File to store user data
 ACCOUNTS_FILE = "accounts.json"
 
 def hash_password(password):
-    # Standard SHA-256 hashing
+    # This turns a password into a secure hash
     return hashlib.sha256(password.encode()).hexdigest()
 
 def load_accounts():
@@ -24,25 +23,23 @@ def save_accounts(accounts):
 
 def create_account(user_id, password_hash):
     """
-    Expects the password to ALREADY be hashed by server.py.
+    STORES the hash directly. Does NOT hash it again.
     """
     accounts = load_accounts()
     if user_id in accounts:
         return False
     
-    # Store the hash directly
     accounts[user_id] = password_hash
     save_accounts(accounts)
     return True
 
 def authenticate_account(user_id, password_plaintext):
     """
-    Takes a PLAINTEXT password, hashes it, and compares to the stored hash.
+    Hashes the input once and checks it against the stored hash.
     """
     accounts = load_accounts()
     if user_id not in accounts:
         return False
     
-    # Hash the input to see if it matches the stored version
     input_hash = hash_password(password_plaintext)
     return accounts[user_id] == input_hash
