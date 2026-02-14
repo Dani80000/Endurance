@@ -1,3 +1,5 @@
 websockets 
 cryptography 
 asyncio
+fastapi
+uvicorn
