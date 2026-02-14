@@ -1,132 +1,96 @@
-import asyncio
-import json
 from getpass import getpass
+import accounts, websockets, asyncio, json
 
-import websockets
-import accounts
+RENDER_URL = "wss://secure-chat-bs75.onrender.com" 
 
-SERVER_URI = "ws://localhost:8765"
+def prompt_auth():
+    while True:
+        choice = input("(l)ogin or (c)reate account? ").lower()
+        if choice in ("l", "c"):
+            return choice
 
-def format_line(payload: dict) -> str:
-    sender = payload.get("sender") or payload.get("user_id") or payload.get("from") or "Unknown"
-    msg = payload.get("message") or payload.get("msg") or payload.get("text") or ""
-
-    if not isinstance(msg, str):
-        msg = str(msg)
-
-    return f'{sender}: "{msg}"'
-
-def login_or_create_local() -> tuple[str, str] | tuple[None, None]:
-
-    choice = input("(l)ogin or (c)reate account? ").strip().lower()
-    user_id = input("Username: ").strip()
-    password = getpass("Password (hidden): ")
-
-    if not user_id:
-        print("Username cannot be empty.")
-        return None, None
-
-    if choice.startswith("c"):
-        pw_hash = accounts.hash_password(password)
-        ok = accounts.create_account(user_id, pw_hash)
-        if not ok:
-            print("Account already exists.")
-            return None, None
-        print("Account created.")
-
-    if not accounts.authenticate_account(user_id, password):
-        print("Login failed.")
-        return None, None
-
-    return user_id, password
-
-async def run_chat(user_id: str, password: str, channel: str = "General", receiver_id: str | None = None):
-    async with websockets.connect(SERVER_URI) as ws:
-        login_packet = {
-            "user_id": user_id,
-            "password": password,
-            "channel": channel,
-            "receiver_id": receiver_id,
-        }
-        await ws.send(json.dumps(login_packet))
-
-        resp = json.loads(await ws.recv())
-        if resp.get("status") != "success":
-            print("Server rejected login:", resp.get("message", resp))
-            return
-
-        print(resp.get("message", "Connected."))
-        print(f"Joined channel: {channel}")
-        print("\n--- Chat ---")
-        print('History (if any) will appear below. Type and press Enter. "/quit" to exit.\n')
-
-        history_lines = []
-        while True:
-            try:
-                raw = await asyncio.wait_for(ws.recv(), timeout=0.25)
-            except asyncio.TimeoutError:
-                break
-            try:
-                payload = json.loads(raw)
-            except json.JSONDecodeError:
-                continue
-            if payload.get("status"):
-                continue
-            line = format_line(payload)
-            history_lines.append(line)
-
-        for line in history_lines:
-            print(line)
-
-        print("> ", end="", flush=True)
-
-        async def receiver_loop():
-            while True:
-                raw = await ws.recv()
-                try:
-                    payload = json.loads(raw)
-                except json.JSONDecodeError:
-                    continue
-
-                line = format_line(payload)
-
-                print("\n" + line)
-                print("> ", end="", flush=True)
-
-        async def input_loop():
-            while True:
-                msg = await asyncio.to_thread(input, "")
-                msg = msg.strip()
-
-                if msg == "/quit":
-                    return
-
-                if not msg:
-                    print("> ", end="", flush=True)
-                    continue
-
-                print(format_line({"sender": user_id, "message": msg}))
-
-                payload = {"message": msg}
-                await ws.send(json.dumps(payload))
-                print("> ", end="", flush=True)
-
+async def chat_loop(websocket, user):
+    print(f"\nConnected to server as {user}")
+    print("Type /quit to exit\n")
+    
+    async def listen_for_messages():
         try:
-            await asyncio.gather(receiver_loop(), input_loop())
-        except websockets.ConnectionClosed:
-            print("\nDisconnected from server.")
-     
-def main():
-    user_id, password = login_or_create_local()
-    if not user_id:
-        return
+            async for message in websocket:
+                data = json.loads(message)
+                sender = data.get("sender", "SYSTEM")
+                content = data.get("message")
+                
+                if sender != user:
+                    print(f"\r[{sender}]: {content}\n> ", end="")
+        except websockets.exceptions.ConnectionClosed:
+            print("\nServer connection closed")
 
-    channel = input('Channel (default "General"): ').strip() or "General"
+    listener_task = asyncio.create_task(listen_for_messages())
 
     try:
-        asyncio.run(run_chat(user_id, password, channel=channel))
-    except KeyboardInterrupt:
-        print("\nGoodbye.")
+        while True:
+            msg = await asyncio.to_thread(input, "> ")
+            if msg == "/quit":
+                break
+
+            if not msg.strip():
+                continue
+
+            payload = {
+                "user_id": user,
+                "message": msg,
+                "channel": "General"
+            }
+            await websocket.send(json.dumps(payload))
+    finally:
+        listener_task.cancel()
+
+async def main():
+    print("=== Secure Chat Client ===")
+    choice = prompt_auth()
+
+    user = input("Username: ").strip().lower()
+    pw = getpass("Password: ")
+
+    print(f"\nConnecting to {RENDER_URL}...")
+    try:
+        async with websockets.connect(RENDER_URL) as websocket:
+            
+            action_type = "login" if choice == "l" else "create"
+
+            auth_data = {
+                "action": action_type,
+                "user_id": user,
+                "password": pw,
+                "channel": "General"
+            }
+            await websocket.send(json.dumps(auth_data))
+            
+            response_json = await websocket.recv()
+            response = json.loads(response_json)
+            
+            print(f"[SYSTEM]: {response.get('message')}")
+            
+            if response.get("status") == "success":
+                if choice == "l":
+                    history = response.get("history", [])
+                    if history:
+                        print("\n--- Recent Messages ---")
+                        for msg in history:
+                            print(f"[{msg.get('sender', 'User')}]: {msg.get('message')}")
+                        print("-----------------------\n")
+                    
+                    await chat_loop(websocket, user)
+                else:
+                    print("Account created successfully on Server")
+            else:
+                print("Connection closed due to error")
+
+    except Exception as e:
+        print(f"Connection Error: {e}")
 
 if __name__ == "__main__":
-    main()
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
