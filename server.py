@@ -83,6 +83,5 @@ async def main():
         print(f"The server is running on port {port}")
         await asyncio.Future()  # Run forever
 
-#safeguard to run the file directly vs importing
 if __name__ == "__main__":
     asyncio.run(main()) 
