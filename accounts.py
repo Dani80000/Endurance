@@ -48,10 +48,15 @@ def create_account(user_id, password_hash):
     return True
 
 def authenticate_account(user_id, password_plaintext):
+    if not os.path.exists("accounts.json"):
+        return False
+
     accounts = load_accounts()
     if user_id not in accounts:
         return False
+    
     return verify_password(accounts[user_id], password_plaintext)
+
 
 def find_account(user_id):
     return user_id in load_accounts()

@@ -7,14 +7,11 @@ async def handler(websocket): # Async will allow us to wait for messages without
     print("New client connected. Waiting for login...")
     
     try: # This is here in order to void errors from getting bad data to prevent any failures TODO:(although this should be around things that can fail only)
-        try:
-            message = await websocket.recv() 
-        except websockets.exceptions.InvalidMessage:
-            return     
+        message = await websocket.recv() 
         data = json.loads(message)
         
         action = data.get("action", "login")
-        user_id = data.get("user_id").strip().lower()
+        user_id = data.get("user_id", "").strip().lower()
         password = data.get("password")
         target_channel = data.get("channel") # ex: "General"
         target_dm = data.get("receiver_id")  # ex: "testUser"
@@ -43,25 +40,23 @@ async def handler(websocket): # Async will allow us to wait for messages without
 
             # Keep the connection open so they can chat
             async for msg in websocket:
+                payload = json.loads(msg)
+                payload["sender"] = user_id 
+                
                 try:
-                    payload = json.loads(msg)
-                    payload["sender"] = user_id 
-                
-                    try:
                       connections.save_message_to_json(payload) 
-                    except Exception as e:
-                        print(f"Error saving message: {e}")
+                except Exception as e:
+                    print(f"Error saving message: {e}")
 
-                    for client in current_clients:
-                        if client != websocket:
-                            await client.send(json.dumps(payload))
-                
-                except json.JSONDecodeError:
-                    print(f"Received non-JSON message from {user_id}")
-                
+                for client in current_clients:
+                    if client != websocket:
+                        await client.send(json.dumps(payload))
+                                
         else:
             print(f"User {user_id} failed login.")
-            await websocket.send(json.dumps({"status": "error", "message": "Login Failed"}))
+            try:
+                await websocket.send(json.dumps({"status": "error", "message": "Login Failed"}))
+            except: pass
 
     except websockets.exceptions.InvalidMessage:
         return
@@ -74,7 +69,7 @@ async def handler(websocket): # Async will allow us to wait for messages without
 
 def health_check(connection, request):
     if "upgrade" not in request.headers.get("Upgrade", "").lower():
-        return connection.respond(http.http.HTTPStatus.OK, "OK\n")
+        return connection.respond(http.HTTPStatus.OK, "OK\n")
     return None
     
 
