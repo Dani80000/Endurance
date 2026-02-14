@@ -29,6 +29,7 @@ def create_account(user_id, password_hash):
     if user_id in accounts:
         return False
     
+    # Store the hash exactly as the server sent it
     accounts[user_id] = password_hash
     save_accounts(accounts)
     return True
@@ -41,5 +42,11 @@ def authenticate_account(user_id, password_plaintext):
     if user_id not in accounts:
         return False
     
+    # Hash the input to see if it matches the stored version
     input_hash = hash_password(password_plaintext)
-    return accounts[user_id] == input_hash
+    
+    # Check against the stored hash
+    if accounts[user_id] == input_hash:
+        return True
+        
+    return False
