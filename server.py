@@ -1,5 +1,5 @@
 # This script handles server related operations
-import asyncio,connections, websockets, json, os, accounts
+import asyncio,connections, websockets, json, os, accounts, http
 
 current_clients = set() # Keeps track of connected clients so messages are broadcasted to them TODO: Add safe removal when a client disconnects during send
 
@@ -71,9 +71,16 @@ async def handler(websocket): # Async will allow us to wait for messages without
         if websocket in current_clients:
             current_clients.remove(websocket)
 
+
+def health_check(connection, request):
+    if "upgrade" not in request.headers.get("Upgrade", "").lower():
+        return connection.respond(http.http.HTTPStatus.OK, "OK\n")
+    return None
+    
+
 async def main():
     port = int(os.environ.get("PORT", 8765))
-    async with websockets.serve(handler, "0.0.0.0", port):
+    async with websockets.serve(handler, "0.0.0.0", port, process_request=health_check):
         print(f"The server is running on port {port}")
         await asyncio.Future()  # Run forever
 
