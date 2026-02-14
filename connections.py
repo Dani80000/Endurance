@@ -1,11 +1,24 @@
 # connections.py
-import asyncio
 import websockets
+import asyncio
+import json
 
 RENDER_URL = "wss://secure-chat-bs75.onrender.com/ws"
 
-async def send_message(message: str) -> str:
-    async with websockets.connect(RENDER_URL) as websocket:
-        await websocket.send(message)
-        response = await websocket.recv()
-        return response
+class Connection:
+    def __init__(self):
+        self.websocket = None
+
+    async def connect(self):
+        self.websocket = await websockets.connect(RENDER_URL)
+
+    async def send(self, packet: dict):
+        await self.websocket.send(json.dumps(packet))
+
+    async def receive(self):
+        response = await self.websocket.recv()
+        return json.loads(response)
+
+    async def close(self):
+        if self.websocket:
+            await self.websocket.close()
