@@ -1,17 +1,9 @@
-from getpass import getpass
-import accounts, websockets, asyncio, json
+import websockets, asyncio, json, eel, queue
 
 RENDER_URL = "wss://secure-chat-bs75.onrender.com" 
 
-def prompt_auth():
-    while True:
-        choice = input("(l)ogin or (c)reate account? ").lower()
-        if choice in ("l", "c"):
-            return choice
-
-async def chat_loop(websocket, user):
-    print(f"\nConnected to server as {user}")
-    print("Type /quit to exit\n")
+async def chat_loop(websocket, user, msg_queue):
+    eel.receiveMessageUI("SYSTEM", f"Connected to server as {user}")()
     
     async def listen_for_messages():
         try:
@@ -19,78 +11,53 @@ async def chat_loop(websocket, user):
                 data = json.loads(message)
                 sender = data.get("sender", "SYSTEM")
                 content = data.get("message")
-                
                 if sender != user:
-                    print(f"\r[{sender}]: {content}\n> ", end="")
+                    eel.receiveMessageUI(sender, content)()
         except websockets.exceptions.ConnectionClosed:
-            print("\nServer connection closed")
+            eel.receiveMessageUI("SYSTEM", "Server connection closed")()
 
-    listener_task = asyncio.create_task(listen_for_messages())
+    asyncio.create_task(listen_for_messages())
 
     try:
         while True:
-            msg = await asyncio.to_thread(input, "> ")
-            if msg == "/quit":
-                break
+            if not msg_queue.empty():
+                msg = msg_queue.get()
+                if msg == "/quit": break
+                if not msg.strip(): continue
 
-            if not msg.strip():
-                continue
-
-            payload = {
-                "user_id": user,
-                "message": msg,
-                "channel": "General"
-            }
-            await websocket.send(json.dumps(payload))
+                payload = {"user_id": user, "message": msg, "channel": "General"}
+                await websocket.send(json.dumps(payload))
+                eel.receiveMessageUI(user, msg)()
+            
+            await asyncio.sleep(0.1)
     finally:
-        listener_task.cancel()
+        pass
 
-async def main():
-    print("=== Secure Chat Client ===")
-    choice = prompt_auth()
-
-    user = input("Username: ").strip().lower()
-    pw = getpass("Password: ")
-
-    print(f"\nConnecting to {RENDER_URL}...")
+async def main_loop(user, pw, action_type, msg_queue):
+    eel.updateLoginStatus(f"Connecting...")()
     try:
         async with websockets.connect(RENDER_URL) as websocket:
-            
-            action_type = "login" if choice == "l" else "create"
-
-            auth_data = {
-                "action": action_type,
-                "user_id": user,
-                "password": pw,
-                "channel": "General"
-            }
+            auth_data = {"action": action_type, "user_id": user, "password": pw, "channel": "General"}
             await websocket.send(json.dumps(auth_data))
             
-            response_json = await websocket.recv()
-            response = json.loads(response_json)
-            
-            print(f"[SYSTEM]: {response.get('message')}")
+            response = json.loads(await websocket.recv())
             
             if response.get("status") == "success":
-                if choice == "l":
+                if action_type == "login":
+                    eel.showChatWindow()()
                     history = response.get("history", [])
-                    if history:
-                        print("\n--- Recent Messages ---")
-                        for msg in history:
-                            print(f"[{msg.get('sender', 'User')}]: {msg.get('message')}")
-                        print("-----------------------\n")
+                    for msg in history:
+                        eel.receiveMessageUI(msg.get('sender', 'User'), msg.get('message'))()
                     
-                    await chat_loop(websocket, user)
+                    await chat_loop(websocket, user, msg_queue)
                 else:
-                    print("Account created successfully on Server")
+                    eel.updateLoginStatus("Account created! Now login.")()
             else:
-                print("Connection closed due to error")
-
+                eel.updateLoginStatus(f"Failed: {response.get('message')}")()
     except Exception as e:
-        print(f"Connection Error: {e}")
+        eel.updateLoginStatus(f"Error: {e}")()
 
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        pass
+def run_client(user, pw, action_type, msg_queue):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(main_loop(user, pw, action_type, msg_queue))

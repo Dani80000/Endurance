@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Endurance Client</title>
+    <script type="text/javascript" src="/eel.js"></script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        #chat-section { display: none; }
+        #chat-history { 
+            border: 1px solid #ccc; 
+            height: 300px; 
+            overflow-y: scroll; 
+            padding: 10px; 
+            margin-bottom: 10px; 
+            width: 400px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="login-section">
+        <h2>Endurance</h2>
+        <input type="text" id="username" placeholder="Username"><br><br>
+        <input type="password" id="password" placeholder="Password"><br><br>
+        
+        <button onclick="triggerPython('login')">Login</button>
+        <button onclick="triggerPython('create')">Create Account</button>
+        
+        <p id="status-text"></p>
+    </div>
+
+    <div id="chat-section">
+        <h2>Server</h2>
+        <div id="chat-history"></div>
+        
+        <input type="text" id="message-input" placeholder="Type a message..." onkeydown="if(event.key === 'Enter') sendMessage()">
+        <button onclick="sendMessage()">Send</button>
+    </div>
+
+    <script>
+        async function triggerPython(actionType) {
+            let user = document.getElementById("username").value;
+            let pass = document.getElementById("password").value;
+            document.getElementById("status-text").innerText = "Connecting...";
+            await eel.start_client_logic(user, pass, actionType)();
+        }
+
+        function sendMessage() {
+            let msg = document.getElementById("message-input").value;
+            if (msg.trim() !== "") {
+                eel.send_chat_message(msg)(); 
+                document.getElementById("message-input").value = ""; 
+            }
+        }
+
+        eel.expose(updateLoginStatus);
+        function updateLoginStatus(text) {
+            document.getElementById("status-text").innerText = text;
+        }
+
+        eel.expose(showChatWindow);
+        function showChatWindow() {
+            document.getElementById("login-section").style.display = "none";
+            document.getElementById("chat-section").style.display = "block";
+        }
+
+        eel.expose(receiveMessageUI); 
+        function receiveMessageUI(sender, text) {
+            let history = document.getElementById("chat-history");
+            history.innerHTML += `<div><b>${sender}:</b> ${text}</div>`;
+            history.scrollTop = history.scrollHeight; 
+        }
+    </script>
+</body>
+</html>
