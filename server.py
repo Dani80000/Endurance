@@ -1,6 +1,7 @@
 import os
 import json
 import time
+from bottle_websocket import websocket
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 import uvicorn
 import accounts
@@ -11,8 +12,8 @@ app = FastAPI()
 if not os.path.exists("messages"):
     os.makedirs("messages")
 
-active_connections = set()
-last_message_times = {} 
+active_connections = {} 
+last_message_times = {}
 RATE_LIMIT_SECONDS = 1 
 
 @app.get("/")
@@ -44,7 +45,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
         print(f"Login attempt: {user_id}")
         if connections.connect(user_id, password):
-            active_connections.add(websocket)
+            
+            active_connections[websocket] = user_id
             current_user = user_id
             
             history = connections.join_channel(user_id, "General")
@@ -55,7 +57,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 "history": history
             })
             
-            for conn in active_connections:
+            for conn in list(active_connections.keys()):
                 if conn != websocket:
                     await conn.send_json({"sender": "SYSTEM", "message": f"{user_id} joined the chat."})
 
@@ -69,7 +71,8 @@ async def websocket_endpoint(websocket: WebSocket):
                     if current_time - last_time < RATE_LIMIT_SECONDS:
                         await websocket.send_json({
                             "sender": "SYSTEM", 
-                            "message": "You are typing too fast, Try again."
+                            "message": "You are typing too fast, Try again.",
+                            "channel": channel
                         })
                         continue
                     
@@ -81,9 +84,16 @@ async def websocket_endpoint(websocket: WebSocket):
                         connections.save_message_to_json(payload)
                     except: pass
                     
-                    for conn in active_connections:
+                    for conn, c_user_id in active_connections.items():
                         if conn != websocket:
-                            await conn.send_json(payload)
+                            if channel == "General":
+                                await conn.send_json(payload)
+                            elif channel.lower().startswith("dm_"):
+                                
+                                allowed_users = channel.lower().split("_")
+
+                                if c_user_id in allowed_users:
+                                    await conn.send_json(payload)
                             
             except WebSocketDisconnect:
                 print(f"{user_id} disconnected")

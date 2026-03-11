@@ -3,7 +3,7 @@ import websockets, asyncio, json, eel, queue
 RENDER_URL = "wss://secure-chat-bs75.onrender.com" 
 
 async def chat_loop(websocket, user, msg_queue):
-    eel.receiveMessageUI("SYSTEM", f"Connected to server as {user}")()
+    eel.receiveMessageUI("SYSTEM", f"Connected to server as {user}", "General")()
     
     async def listen_for_messages():
         try:
@@ -11,6 +11,8 @@ async def chat_loop(websocket, user, msg_queue):
                 data = json.loads(message)
                 sender = data.get("sender", "SYSTEM")
                 content = data.get("message")
+                channel = data.get("channel", "General")
+                
                 if sender != user:
                     eel.receiveMessageUI(sender, content)()
         except websockets.exceptions.ConnectionClosed:
@@ -21,13 +23,17 @@ async def chat_loop(websocket, user, msg_queue):
     try:
         while True:
             if not msg_queue.empty():
-                msg = msg_queue.get()
-                if msg == "/quit": break
-                if not msg.strip(): continue
+                msg_data = msg_queue.get()
 
-                payload = {"user_id": user, "message": msg, "channel": "General"}
+                text = msg_data["msg"]
+                channel = msg_data["channel"]
+
+                if text == "/quit": break
+                if not text.strip(): continue
+
+                payload = {"user_id": user, "message": text, "channel": channel}
                 await websocket.send(json.dumps(payload))
-                eel.receiveMessageUI(user, msg)()
+                eel.receiveMessageUI(user, text, channel)()
             
             await asyncio.sleep(0.1)
     finally:
@@ -47,7 +53,7 @@ async def main_loop(user, pw, action_type, msg_queue):
                     eel.showChatWindow()()
                     history = response.get("history", [])
                     for msg in history:
-                        eel.receiveMessageUI(msg.get('sender', 'User'), msg.get('message'))()
+                        eel.receiveMessageUI(msg.get('sender', 'User'), msg.get('message'), "General")()
                     
                     await chat_loop(websocket, user, msg_queue)
                 else:

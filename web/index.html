@@ -20,35 +20,74 @@
 
     <div id="login-section">
         <h2>Endurance</h2>
-        <input type="text" id="username" placeholder="Username"><br><br>
-        <input type="password" id="password" placeholder="Password"><br><br>
-        
+        <input type="text" id="username" placeholder="Username" onkeydown="if(event.key === 'Enter') document.getElementById('password').focus()"><br><br>
+        <input type="password" id="password" placeholder="Password" onkeydown="if(event.key === 'Enter') triggerPython('login')"><br><br>
+
         <button onclick="triggerPython('login')">Login</button>
         <button onclick="triggerPython('create')">Create Account</button>
-        
+
         <p id="status-text"></p>
     </div>
 
     <div id="chat-section">
-        <h2>Server</h2>
+        <div style="margin-bottom: 10px;">
+            <h2 style="margin-top: 0; margin-bottom: 5px;">Room: <span id="chat-title">Server</span></h2>
+            <input type="text" id="dm-user-input" placeholder="User to DM..." onkeydown="if(event.key === 'Enter') switchChat()">
+            <button onclick="switchChat()">DM User</button>
+            <button onclick="switchToServer()">Back to Server</button>
+        </div>
+
         <div id="chat-history"></div>
-        
+
         <input type="text" id="message-input" placeholder="Type a message..." onkeydown="if(event.key === 'Enter') sendMessage()">
         <button onclick="sendMessage()">Send</button>
     </div>
 
     <script>
+        let myUsername = "";
+        let currentChannel = "General";
+        let chatData = { "General": "" }; 
+
         async function triggerPython(actionType) {
-            let user = document.getElementById("username").value;
+            myUsername = document.getElementById("username").value.toLowerCase().trim();
             let pass = document.getElementById("password").value;
             document.getElementById("status-text").innerText = "Connecting...";
-            await eel.start_client_logic(user, pass, actionType)();
+            await eel.start_client_logic(myUsername, pass, actionType)();
+        }
+
+        // unique channel names
+        function getDMChannel(user1, user2) {
+            let users = [user1.toLowerCase(), user2.toLowerCase()].sort();
+            return "DM_" + users[0] + "_" + users[1];
+        }
+
+        function switchChat() {
+            let targetUser = document.getElementById("dm-user-input").value.trim().toLowerCase();
+            if (targetUser === "" || targetUser === myUsername) return;
+            
+            currentChannel = getDMChannel(myUsername, targetUser);
+            document.getElementById("chat-title").innerText = "DM: " + targetUser;
+            document.getElementById("dm-user-input").value = "";
+            refreshChatBox();
+        }
+
+        function switchToServer() {
+            currentChannel = "General";
+            document.getElementById("chat-title").innerText = "Server";
+            refreshChatBox();
+        }
+
+        function refreshChatBox() {
+            if (!chatData[currentChannel]) chatData[currentChannel] = "";
+            let historyBox = document.getElementById("chat-history");
+            historyBox.innerHTML = chatData[currentChannel];
+            historyBox.scrollTop = historyBox.scrollHeight;
         }
 
         function sendMessage() {
             let msg = document.getElementById("message-input").value;
             if (msg.trim() !== "") {
-                eel.send_chat_message(msg)(); 
+                eel.send_chat_message(msg, currentChannel)(); 
                 document.getElementById("message-input").value = ""; 
             }
         }
@@ -62,13 +101,17 @@
         function showChatWindow() {
             document.getElementById("login-section").style.display = "none";
             document.getElementById("chat-section").style.display = "block";
+            refreshChatBox();
         }
 
         eel.expose(receiveMessageUI); 
-        function receiveMessageUI(sender, text) {
-            let history = document.getElementById("chat-history");
-            history.innerHTML += `<div><b>${sender}:</b> ${text}</div>`;
-            history.scrollTop = history.scrollHeight; 
+        function receiveMessageUI(sender, text, channel="General") {
+            if (!chatData[channel]) chatData[channel] = "";
+            chatData[channel] += `<div><b>${sender}:</b> ${text}</div>`;
+            
+            if (channel === currentChannel) {
+                refreshChatBox();
+            }
         }
     </script>
 </body>
