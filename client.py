@@ -9,6 +9,12 @@ async def chat_loop(websocket, user, msg_queue):
         try:
             async for message in websocket:
                 data = json.loads(message)
+                if data.get("action") == "history_update":
+                    channel = data.get("channel")
+                    history = data.get("history", [])
+                    eel.receiveHistoryUI(channel, history)()
+                    continue
+                
                 sender = data.get("sender", "SYSTEM")
                 content = data.get("message")
                 channel = data.get("channel", "General")

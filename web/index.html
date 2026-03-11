@@ -1,27 +1,38 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Endurance Client</title>
     <script type="text/javascript" src="/eel.js"></script>
     <style>
-        body { font-family: sans-serif; padding: 20px; }
-        #chat-section { display: none; }
-        #chat-history { 
-            border: 1px solid #ccc; 
-            height: 300px; 
-            overflow-y: scroll; 
-            padding: 10px; 
-            margin-bottom: 10px; 
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+        }
+
+        #chat-section {
+            display: none;
+        }
+
+        #chat-history {
+            border: 1px solid #ccc;
+            height: 300px;
+            overflow-y: scroll;
+            padding: 10px;
+            margin-bottom: 10px;
             width: 400px;
         }
     </style>
 </head>
+
 <body>
 
     <div id="login-section">
         <h2>Endurance</h2>
-        <input type="text" id="username" placeholder="Username" onkeydown="if(event.key === 'Enter') document.getElementById('password').focus()"><br><br>
-        <input type="password" id="password" placeholder="Password" onkeydown="if(event.key === 'Enter') triggerPython('login')"><br><br>
+        <input type="text" id="username" placeholder="Username"
+            onkeydown="if(event.key === 'Enter') document.getElementById('password').focus()"><br><br>
+        <input type="password" id="password" placeholder="Password"
+            onkeydown="if(event.key === 'Enter') triggerPython('login')"><br><br>
 
         <button onclick="triggerPython('login')">Login</button>
         <button onclick="triggerPython('create')">Create Account</button>
@@ -32,21 +43,23 @@
     <div id="chat-section">
         <div style="margin-bottom: 10px;">
             <h2 style="margin-top: 0; margin-bottom: 5px;">Room: <span id="chat-title">Server</span></h2>
-            <input type="text" id="dm-user-input" placeholder="User to DM..." onkeydown="if(event.key === 'Enter') switchChat()">
+            <input type="text" id="dm-user-input" placeholder="User to DM..."
+                onkeydown="if(event.key === 'Enter') switchChat()">
             <button onclick="switchChat()">DM User</button>
             <button onclick="switchToServer()">Back to Server</button>
         </div>
 
         <div id="chat-history"></div>
 
-        <input type="text" id="message-input" placeholder="Type a message..." onkeydown="if(event.key === 'Enter') sendMessage()">
+        <input type="text" id="message-input" placeholder="Type a message..."
+            onkeydown="if(event.key === 'Enter') sendMessage()">
         <button onclick="sendMessage()">Send</button>
     </div>
 
     <script>
         let myUsername = "";
         let currentChannel = "General";
-        let chatData = { "General": "" }; 
+        let chatData = { "General": "" };
 
         async function triggerPython(actionType) {
             myUsername = document.getElementById("username").value.toLowerCase().trim();
@@ -64,7 +77,7 @@
         function switchChat() {
             let targetUser = document.getElementById("dm-user-input").value.trim().toLowerCase();
             if (targetUser === "" || targetUser === myUsername) return;
-            
+
             currentChannel = getDMChannel(myUsername, targetUser);
             document.getElementById("chat-title").innerText = "DM: " + targetUser;
             document.getElementById("dm-user-input").value = "";
@@ -74,7 +87,9 @@
         function switchToServer() {
             currentChannel = "General";
             document.getElementById("chat-title").innerText = "Server";
-            refreshChatBox();
+            document.getElementById("chat-history").innerHTML = "<i>Loading server chat...</i>";
+    
+            eel.send_chat_action("get_history", "General")();        
         }
 
         function refreshChatBox() {
@@ -87,8 +102,8 @@
         function sendMessage() {
             let msg = document.getElementById("message-input").value;
             if (msg.trim() !== "") {
-                eel.send_chat_message(msg, currentChannel)(); 
-                document.getElementById("message-input").value = ""; 
+                eel.send_chat_message(msg, currentChannel)();
+                document.getElementById("message-input").value = "";
             }
         }
 
@@ -104,15 +119,49 @@
             refreshChatBox();
         }
 
-        eel.expose(receiveMessageUI); 
-        function receiveMessageUI(sender, text, channel="General") {
+        eel.expose(receiveMessageUI);
+        function receiveMessageUI(sender, text, channel = "General") {
             if (!chatData[channel]) chatData[channel] = "";
             chatData[channel] += `<div><b>${sender}:</b> ${text}</div>`;
-            
+
             if (channel === currentChannel) {
                 refreshChatBox();
             }
         }
+
+
+        function requestHistory(channelName) {
+            eel.send_chat_action("get_history", channelName)();
+        }
+
+        function switchChat() {
+            let targetUser = document.getElementById("dm-user-input").value.trim().toLowerCase();
+            if (targetUser === "" || targetUser === myUsername) return;
+
+            currentChannel = getDMChannel(myUsername, targetUser);
+            document.getElementById("chat-title").innerText = "DM: " + targetUser;
+
+            document.getElementById("chat-history").innerHTML = "<i>Loading conversation...</i>";
+
+            eel.send_chat_action("get_history", currentChannel)();
+        }
+
+        eel.expose(receiveHistoryUI);
+        function receiveHistoryUI(channel, history) {
+            let html = "";
+            history.forEach(msg => {
+                html += `<div class="msg"><b>${msg.sender}:</b> ${msg.message}</div>`;
+            });
+
+            chatData[channel] = html;
+
+            if (channel === currentChannel) {
+               let historyBox = document.getElementById("chat-history");
+                historyBox.innerHTML = html;
+                historyBox.scrollTop = historyBox.scrollHeight;
+            }
+        }
     </script>
 </body>
+
 </html>

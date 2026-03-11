@@ -11,7 +11,7 @@ app = FastAPI()
 if not os.path.exists("messages"):
     os.makedirs("messages")
 
-active_connections = {} 
+active_connections = {}
 last_message_times = {}
 RATE_LIMIT_SECONDS = 1 
 
@@ -25,10 +25,9 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("New client connected.")
     current_user = None
-    
+
     try:
         data = await websocket.receive_json()
-        
         action = data.get("action", "login")
         user_id = data.get("user_id", "").strip().lower()
         password = data.get("password")
@@ -58,12 +57,23 @@ async def websocket_endpoint(websocket: WebSocket):
             
             for conn in list(active_connections.keys()):
                 if conn != websocket:
-                    await conn.send_json({"sender": "SYSTEM", "message": f"{user_id} joined the chat."})
+                    await conn.send_json({"sender": "SYSTEM", "message": f"{user_id} joined the chat.", "channel": "General"})
 
             try:
                 while True:
                     payload = await websocket.receive_json()
                     
+                    channel = payload.get("channel", "General")
+
+                    if action == "get_history":
+                        history = connections.join_channel(current_user, channel)
+                        await websocket.send_json({
+                            "action": "history_update",
+                            "channel": channel,
+                            "history": history
+                        })
+                        continue
+
                     current_time = time.time()
                     last_time = last_message_times.get(user_id, 0)
                     
@@ -96,19 +106,18 @@ async def websocket_endpoint(websocket: WebSocket):
                             
             except WebSocketDisconnect:
                 print(f"{user_id} disconnected")
-                active_connections.remove(websocket)
+                if websocket in active_connections: del active_connections[websocket]
                 if user_id in last_message_times:
                     del last_message_times[user_id]
-                for conn in active_connections:
-                    await conn.send_json({"sender": "SYSTEM", "message": f"{user_id} left."})
+                for conn in list(active_connections.keys()):
+                    await conn.send_json({"sender": "SYSTEM", "message": f"{user_id} left.", "channel": "General"})
         else:
             await websocket.send_json({"status": "error", "message": "Login Failed"})
 
     except Exception as e:
         print(f"Error: {e}")
     finally:
-        if websocket in active_connections:
-            active_connections.remove(websocket)
+        if websocket in active_connections: del active_connections[websocket]
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
