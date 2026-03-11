@@ -1,7 +1,6 @@
 import os
 import json
 import time
-from bottle_websocket import websocket
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 import uvicorn
 import accounts
