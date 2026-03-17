@@ -84,8 +84,7 @@ async def main_loop(user, pw, action_type, msg_queue):
                 if action_type == "login":
                     eel.showChatWindow()()
                     history = response.get("history", [])
-                    for msg in history:
-                        eel.receiveMessageUI(msg.get('sender', 'User'), msg.get('message'), "General")()
+                    eel.receiveHistoryUI("General", history)()
                     
                     await chat_loop(websocket, user, msg_queue)
                 else:

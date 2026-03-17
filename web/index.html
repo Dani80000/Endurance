@@ -111,7 +111,6 @@
 
 <body>
 
-    <!-- LOGIN -->
     <div id="login-section">
         <h2>Endurance</h2>
 
@@ -127,7 +126,6 @@
         <p id="status-text"></p>
     </div>
 
-    <!-- CHAT -->
     <div id="chat-section">
 
         <h2>Room: <span id="chat-title">Server</span></h2>
@@ -208,6 +206,20 @@
             eel.request_channel_history(currentChannel)();
         }
 
+        function formatMessage(text) {
+            let richText = text.replace(/[&<>'"]/g, tag => ({ //for safety dont remove
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+            }[tag]));
+
+            richText = richText.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+            
+            richText = richText.replace(/\*(.*?)\*/g, '<i>$1</i>');
+            
+            richText = richText.replace(/(^|\s)(https?:\/\/[^\s<]+)/g, '$1<a href="$2" target="_blank" style="color: #3cff88; text-decoration: underline;">$2</a>');
+            
+            return richText;
+        }
+
         function sendFile() {
             const fileInput = document.getElementById('file-input');
             const file = fileInput.files[0];
@@ -260,7 +272,7 @@
             else if (sender === myUsername) cls += " self";
             else cls += " other";
 
-            let displayContent = text;
+            let displayContent = formatMessage(text);
             if (typeof text === 'object' && text !== null && text.type === 'file') {
                 displayContent = `<a href="${text.data}" download="${text.filename}" style="color: #3cff88; text-decoration: underline;"> Download ${text.filename}</a>`;
             }
@@ -286,7 +298,7 @@
                 else if (msg.sender === myUsername) cls += " self";
                 else cls += " other";
 
-                let displayContent = msg.message;
+                let displayContent = formatMessage(msg.message);
                 if (typeof msg.message === 'object' && msg.message !== null && msg.message.type === 'file') {
                     displayContent = `<a href="${msg.message.data}" download="${msg.message.filename}" style="color: #3cff88; text-decoration: underline;">Download ${msg.message.filename}</a>`;
                 }
