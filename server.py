@@ -20,6 +20,25 @@ RATE_LIMIT_SECONDS = 1
 async def root():
     return {"status": "Live and waiting for connections"}
 
+
+def normalize_dm_channel(user1: str, user2: str) -> str:
+    a, b = sorted([user1.strip().lower(), user2.strip().lower()])
+    return f"dm_{a}_{b}"
+
+
+def normalize_channel_name(channel: str) -> str:
+    channel = (channel or "General").strip()
+
+    if channel.lower() == "general":
+        return "General"
+
+    if channel.lower().startswith("dm_"):
+        parts = channel.split("_")[1:]
+        if len(parts) == 2:
+            return normalize_dm_channel(parts[0], parts[1])
+    return channel
+
+
 @app.websocket("/")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
@@ -62,7 +81,7 @@ async def websocket_endpoint(websocket: WebSocket):
             try:
                 while True:
                     payload = await websocket.receive_json()
-                    
+                    action = payload.get("action", "send_message")
                     channel = payload.get("channel", "General")
 
                     if action == "get_history":
@@ -91,18 +110,27 @@ async def websocket_endpoint(websocket: WebSocket):
                     
                     try:
                         connections.save_message_to_json(payload)
-                    except: pass
+                    except Exception as e:
+                        print(f"Failed to save message: {e}")
                     
-                    for conn, c_user_id in active_connections.items():
-                        if conn != websocket:
-                            if channel == "General":
-                                await conn.send_json(payload)
-                            elif channel.lower().startswith("dm_"):
-                                
-                                allowed_users = channel.lower().split("_")
+                    if channel == "General":
+                        for conn in list(active_connections.keys()):
+                            await conn.send_json(payload)
+                    
+                    elif channel.lower().startswith("dm_"):
+                        allowed_users = channel.lower().split("_")[1:]
 
-                                if c_user_id in allowed_users:
-                                    await conn.send_json(payload)
+                        if current_user not in allowed_users:
+                            await websocket.send_json({
+                                "sender": "SYSTEM",
+                                "message": "You are not part of this DM.",
+                                "channel": channel
+                            })
+                            continue
+
+                        for conn, c_user_id in list(active_connections.items()):
+                            if c_user_id in allowed_users:
+                                await conn.send_json(payload)
                             
             except WebSocketDisconnect:
                 print(f"{user_id} disconnected")

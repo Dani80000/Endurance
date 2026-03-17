@@ -2,6 +2,23 @@ import websockets, asyncio, json, eel, queue
 
 RENDER_URL = "wss://secure-chat-bs75.onrender.com" 
 
+def normalize_dm_channel(user1, user2):
+    a, b = sorted([user1.strip().lower(), user2.strip().lower()])
+    return f"dm_{a}_{b}"
+
+def normalize_channel_name(channel: str) -> str:
+    channel = (channel or "General").strip()
+
+    if channel.lower() == "general":
+        return "General"
+
+    if channel.lower().startswith("dm_"):
+        parts = channel.split("_")[1:]
+        if len(parts) == 2:
+            return normalize_dm_channel(parts[0], parts[1])
+
+    return channel
+
 async def chat_loop(websocket, user, msg_queue):
     eel.receiveMessageUI("SYSTEM", f"Connected to server as {user}", "General")()
     
@@ -10,7 +27,7 @@ async def chat_loop(websocket, user, msg_queue):
             async for message in websocket:
                 data = json.loads(message)
                 if data.get("action") == "history_update":
-                    channel = data.get("channel")
+                    channel = data.get("channel", "General")
                     history = data.get("history", [])
                     eel.receiveHistoryUI(channel, history)()
                     continue
@@ -20,9 +37,9 @@ async def chat_loop(websocket, user, msg_queue):
                 channel = data.get("channel", "General")
                 
                 if sender != user:
-                    eel.receiveMessageUI(sender, content)()
+                    eel.receiveMessageUI(sender, content, channel)()
         except websockets.exceptions.ConnectionClosed:
-            eel.receiveMessageUI("SYSTEM", "Server connection closed")()
+            eel.receiveMessageUI("SYSTEM", "Server connection closed", "General")()
 
     asyncio.create_task(listen_for_messages())
 
@@ -30,10 +47,17 @@ async def chat_loop(websocket, user, msg_queue):
         while True:
             if not msg_queue.empty():
                 msg_data = msg_queue.get()
+                
+                action = msg_data.get("action", "send_message")
+                channel = normalize_channel_name(msg_data.get("channel", "General"))
+                
+                if action == "get_history":
+                    payload = {"action": "get_history", "channel":channel}
+                    await websocket.send(json.dumps(payload))
+                    await asyncio.sleep(0.1)
+                    continue
 
-                text = msg_data["msg"]
-                channel = msg_data["channel"]
-
+                text = msg_data.get("msg", "")
                 if text == "/quit": break
                 if not text.strip(): continue
 

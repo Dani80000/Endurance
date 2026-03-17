@@ -18,5 +18,12 @@ def start_client_logic(username, password, action):
 def send_chat_message(msg, channel):
     instance_queue.put({"action": "send_message", "channel": channel, "msg": msg})
 
+@eel.expose
+def request_channel_history(channel):
+    instance_queue.put({
+        "action": "get_history",
+        "channel": channel
+    })
+
 if __name__ == '__main__':
     eel.start('index.html', size=(600, 500), port=0) # this is for testing multiple windows at a time
