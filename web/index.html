@@ -140,10 +140,16 @@
 
         <div id="chat-history"></div>
 
+        <div style="display: flex; gap: 5px; margin-bottom: 8px;">
+            <input type="file" id="file-input" style="width: auto; margin-bottom: 0;">
+            <button onclick="sendFile()">Send File</button>
+        </div>
+
         <input type="text" id="message-input" placeholder="Type a message..."
             onkeydown="if(event.key === 'Enter') sendMessage()">
 
         <button onclick="sendMessage()">Send</button>
+
     </div>
 
     <script>
@@ -202,6 +208,27 @@
             eel.request_channel_history(currentChannel)();
         }
 
+        function sendFile() {
+            const fileInput = document.getElementById('file-input');
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function () {
+                const base64String = reader.result;
+
+                let filePayload = {
+                    type: "file",
+                    filename: file.name,
+                    data: base64String
+                };
+
+                eel.send_chat_message(filePayload, currentChannel)();
+                fileInput.value = "";
+            };
+            reader.readAsDataURL(file);
+        }
+
         function sendMessage() {
             let msg = document.getElementById("message-input").value;
 
@@ -233,9 +260,14 @@
             else if (sender === myUsername) cls += " self";
             else cls += " other";
 
+            let displayContent = text;
+            if (typeof text === 'object' && text !== null && text.type === 'file') {
+                displayContent = `<a href="${text.data}" download="${text.filename}" style="color: #3cff88; text-decoration: underline;"> Download ${text.filename}</a>`;
+            }
+
             chatData[channel] += `
                 <div class="${cls}">
-                    <b>${capitalizeName(sender)}</b>: ${text}
+                    <b>${capitalizeName(sender)}</b>: ${displayContent}
                 </div>
             `;
 
@@ -254,9 +286,14 @@
                 else if (msg.sender === myUsername) cls += " self";
                 else cls += " other";
 
+                let displayContent = msg.message;
+                if (typeof msg.message === 'object' && msg.message !== null && msg.message.type === 'file') {
+                    displayContent = `<a href="${msg.message.data}" download="${msg.message.filename}" style="color: #3cff88; text-decoration: underline;">Download ${msg.message.filename}</a>`;
+                }
+
                 html += `
                     <div class="${cls}">
-                        <b>${capitalizeName(msg.sender)}</b>: ${msg.message}
+                        <b>${capitalizeName(msg.sender)}</b>: ${displayContent}
                     </div>
                 `;
             });
@@ -272,4 +309,5 @@
     </script>
 
 </body>
+
 </html>

@@ -58,10 +58,12 @@ async def chat_loop(websocket, user, msg_queue):
                     continue
 
                 text = msg_data.get("msg", "")
-                if text == "/quit": break
-                if not text.strip(): continue
+                
+                if isinstance(text, str):
+                    if text == "/quit": break
+                    if not text.strip(): continue
 
-                payload = {"user_id": user, "message": text, "channel": channel}
+                payload = {"action": "send_message", "user_id": user, "message": text, "channel": channel}
                 await websocket.send(json.dumps(payload))
                 eel.receiveMessageUI(user, text, channel)()
             
