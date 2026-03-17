@@ -36,12 +36,20 @@
             padding: 10px;
             margin-bottom: 10px;
             border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
         }
 
         .msg {
             margin-bottom: 6px;
             padding: 6px 8px;
             border-radius: 6px;
+            overflow-wrap: break-word;
+            word-break: break-word;
+            max-width: 100%;
+            box-sizing: border-box;
+            word-wrap: break-word;
         }
 
         .msg.self {
@@ -71,8 +79,30 @@
             background-color: #0f141a;
             color: #e6edf3;
             outline: none;
+            resize: vertical;
         }
 
+        textarea,
+        input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            border: 1px solid #1f2a36;
+            background-color: #0f141a;
+            color: #e6edf3;
+            outline: none;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 40px;
+            max-height: 150px;
+        }
+
+        textarea:focus,
         input:focus {
             border-color: #3cff88;
             box-shadow: 0 0 6px #3cff8844;
@@ -143,8 +173,8 @@
             <button onclick="sendFile()">Send File</button>
         </div>
 
-        <input type="text" id="message-input" placeholder="Type a message..."
-            onkeydown="if(event.key === 'Enter') sendMessage()">
+        <textarea id="message-input" placeholder="Type a message...  (Shift + Enter for new line)"
+            onkeydown="handleEnter(event)" rows="2"></textarea>
 
         <button onclick="sendMessage()">Send</button>
 
@@ -212,10 +242,12 @@
             }[tag]));
 
             richText = richText.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
-            
+
             richText = richText.replace(/\*(.*?)\*/g, '<i>$1</i>');
-            
+
             richText = richText.replace(/(^|\s)(https?:\/\/[^\s<]+)/g, '$1<a href="$2" target="_blank" style="color: #3cff88; text-decoration: underline;">$2</a>');
+
+            richText = richText.replace(/\n/g, '<br>');
             
             return richText;
         }
@@ -239,6 +271,13 @@
                 fileInput.value = "";
             };
             reader.readAsDataURL(file);
+        }
+
+        function handleEnter(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
         }
 
         function sendMessage() {
