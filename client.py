@@ -58,10 +58,12 @@ async def chat_loop(websocket, user, msg_queue):
                     continue
 
                 text = msg_data.get("msg", "")
-                if text == "/quit": break
-                if not text.strip(): continue
+                
+                if isinstance(text, str):
+                    if text == "/quit": break
+                    if not text.strip(): continue
 
-                payload = {"user_id": user, "message": text, "channel": channel}
+                payload = {"action": "send_message", "user_id": user, "message": text, "channel": channel}
                 await websocket.send(json.dumps(payload))
                 eel.receiveMessageUI(user, text, channel)()
             
@@ -82,8 +84,7 @@ async def main_loop(user, pw, action_type, msg_queue):
                 if action_type == "login":
                     eel.showChatWindow()()
                     history = response.get("history", [])
-                    for msg in history:
-                        eel.receiveMessageUI(msg.get('sender', 'User'), msg.get('message'), "General")()
+                    eel.receiveHistoryUI("General", history)()
                     
                     await chat_loop(websocket, user, msg_queue)
                 else:

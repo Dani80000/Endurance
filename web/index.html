@@ -4,114 +4,11 @@
 <head>
     <title>Endurance Client</title>
     <script type="text/javascript" src="/eel.js"></script>
-
-    <style>
-        body {
-            font-family: 'Segoe UI', sans-serif;
-            background-color: #0b0f14;
-            color: #e6edf3;
-            padding: 20px;
-        }
-
-        #login-section,
-        #chat-section {
-            max-width: 500px;
-            margin: auto;
-        }
-
-        h2 {
-            color: #3cff88;
-            text-shadow: 0 0 8px #3cff8844;
-        }
-
-        #chat-section {
-            display: none;
-        }
-
-        #chat-history {
-            background-color: #111821;
-            border: 1px solid #1f2a36;
-            height: 320px;
-            overflow-y: auto;
-            padding: 10px;
-            margin-bottom: 10px;
-            border-radius: 8px;
-        }
-
-        .msg {
-            margin-bottom: 6px;
-            padding: 6px 8px;
-            border-radius: 6px;
-        }
-
-        .msg.self {
-            background-color: #1b2b22;
-            border-left: 3px solid #3cff88;
-        }
-
-        .msg.other {
-            background-color: #161c24;
-        }
-
-        .msg.system {
-            color: #8899aa;
-            font-style: italic;
-        }
-
-        .msg b {
-            color: #3cff88;
-        }
-
-        input {
-            width: calc(100% - 10px);
-            padding: 8px;
-            margin-bottom: 8px;
-            border-radius: 6px;
-            border: 1px solid #1f2a36;
-            background-color: #0f141a;
-            color: #e6edf3;
-            outline: none;
-        }
-
-        input:focus {
-            border-color: #3cff88;
-            box-shadow: 0 0 6px #3cff8844;
-        }
-
-        button {
-            background-color: #1a242f;
-            color: #3cff88;
-            border: 1px solid #3cff88;
-            padding: 8px 12px;
-            border-radius: 6px;
-            cursor: pointer;
-            margin-right: 5px;
-            transition: 0.2s;
-        }
-
-        button:hover {
-            background-color: #3cff88;
-            color: #0b0f14;
-        }
-
-        #chat-title {
-            color: #3cff88;
-        }
-
-        #chat-history::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        #chat-history::-webkit-scrollbar-thumb {
-            background: #3cff88;
-            border-radius: 4px;
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-    <!-- LOGIN -->
     <div id="login-section">
         <h2>Endurance</h2>
 
@@ -127,7 +24,6 @@
         <p id="status-text"></p>
     </div>
 
-    <!-- CHAT -->
     <div id="chat-section">
 
         <h2>Room: <span id="chat-title">Server</span></h2>
@@ -140,11 +36,30 @@
 
         <div id="chat-history"></div>
 
-        <input type="text" id="message-input" placeholder="Type a message..."
-            onkeydown="if(event.key === 'Enter') sendMessage()">
+        <div style="display: flex; gap: 5px; margin-bottom: 8px;">
+            <input type="file" id="file-input" style="width: auto; margin-bottom: 0;">
+            <button onclick="sendFile()">Send File</button>
+        </div>
 
-        <button onclick="sendMessage()">Send</button>
+        <div style="position: relative; display: flex; gap: 5px; margin-bottom: 8px;">
+
+            <div id="emoji-picker"
+                style="display: none; position: absolute; bottom: 100%; right: 60px; margin-bottom: 5px; background-color: #111821; border: 1px solid #1f2a36; padding: 10px; border-radius: 8px; width: 220px; max-height: 150px; overflow-y: auto; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+            </div>
+
+            <textarea id="message-input" placeholder="Type a message...&#10;(Shift + Enter for new line)"
+                onkeydown="handleEnter(event)" rows="2" style="flex-grow: 1; margin-bottom: 0;"></textarea>
+
+            <div style="display: flex; flex-direction: column; gap: 5px;">
+                <button onclick="toggleEmojiPicker()" style="margin: 0; padding: 5px; font-size: 18px;"
+                    title="Emojis">:D</button>
+                <button onclick="sendMessage()" style="margin: 0; flex-grow: 1; font-weight: bold;">Send</button>
+            </div>
+        </div>
+
     </div>
+
+
 
     <script>
         let myUsername = "";
@@ -202,6 +117,85 @@
             eel.request_channel_history(currentChannel)();
         }
 
+        function formatMessage(text) {
+            let richText = text.replace(/[&<>'"]/g, tag => ({ //for safety dont remove
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+            }[tag]));
+
+            richText = richText.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+
+            richText = richText.replace(/\*(.*?)\*/g, '<i>$1</i>');
+
+            richText = richText.replace(/(^|\s)(https?:\/\/[^\s<]+)/g, '$1<a href="$2" target="_blank" style="color: #3cff88; text-decoration: underline;">$2</a>');
+
+            richText = richText.replace(/\n/g, '<br>');
+
+            return richText;
+        }
+
+        function sendFile() {
+            const fileInput = document.getElementById('file-input');
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function () {
+                const base64String = reader.result;
+
+                let filePayload = {
+                    type: "file",
+                    filename: file.name,
+                    data: base64String
+                };
+
+                eel.send_chat_message(filePayload, currentChannel)();
+                fileInput.value = "";
+            };
+            reader.readAsDataURL(file);
+        }
+
+
+        const emojiList = ["🙂", "😀", "😂", "😍", "😎", "🥺", "😢", "😅", "🥴", "😡", "❤️", "🔥", "💀", "🍺", "💻", "✅", "❌"];
+
+        function loadEmojiPicker() {
+            const picker = document.getElementById("emoji-picker");
+
+            const grid = document.createElement("div");
+            grid.className = "emoji-grid";
+
+            emojiList.forEach(emoji => {
+                const span = document.createElement("span");
+                span.className = "emoji-item";
+                span.innerText = emoji;
+                span.onclick = () => insertEmoji(emoji);
+                grid.appendChild(span);
+            });
+
+            picker.innerHTML = "";
+            picker.appendChild(grid);
+        }
+
+        function toggleEmojiPicker() {
+            const picker = document.getElementById("emoji-picker");
+            picker.style.display = (picker.style.display === "block") ? "none" : "block";
+        }
+
+        function insertEmoji(emoji) {
+            const input = document.getElementById("message-input");
+            input.value += emoji;
+            input.focus();
+        }
+
+        loadEmojiPicker();
+
+
+        function handleEnter(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
         function sendMessage() {
             let msg = document.getElementById("message-input").value;
 
@@ -233,9 +227,14 @@
             else if (sender === myUsername) cls += " self";
             else cls += " other";
 
+            let displayContent = formatMessage(text);
+            if (typeof text === 'object' && text !== null && text.type === 'file') {
+                displayContent = `<a href="${text.data}" download="${text.filename}" style="color: #3cff88; text-decoration: underline;"> Download ${text.filename}</a>`;
+            }
+
             chatData[channel] += `
                 <div class="${cls}">
-                    <b>${capitalizeName(sender)}</b>: ${text}
+                    <b>${capitalizeName(sender)}</b>: ${displayContent}
                 </div>
             `;
 
@@ -254,9 +253,14 @@
                 else if (msg.sender === myUsername) cls += " self";
                 else cls += " other";
 
+                let displayContent = formatMessage(msg.message);
+                if (typeof msg.message === 'object' && msg.message !== null && msg.message.type === 'file') {
+                    displayContent = `<a href="${msg.message.data}" download="${msg.message.filename}" style="color: #3cff88; text-decoration: underline;">Download ${msg.message.filename}</a>`;
+                }
+
                 html += `
                     <div class="${cls}">
-                        <b>${capitalizeName(msg.sender)}</b>: ${msg.message}
+                        <b>${capitalizeName(msg.sender)}</b>: ${displayContent}
                     </div>
                 `;
             });
@@ -272,4 +276,5 @@
     </script>
 
 </body>
+
 </html>
