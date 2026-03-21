@@ -26,4 +26,4 @@ def request_channel_history(channel):
     })
 
 if __name__ == '__main__':
-    eel.start('index.html', size=(600, 500), port=0) # this is for testing multiple windows at a time
+    eel.start('index.html', mode='default', size=(600, 500), port=0) # this is for testing multiple windows at a time
