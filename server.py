@@ -160,10 +160,13 @@ async def websocket_endpoint(websocket: WebSocket):
                     await conn.send_json({"sender": "SYSTEM", "message": f"{user_id} left.", "channel": "General"})
         else:
             record_failed_attempt(ip)
-            attempts_left = MAX_ATTEMPTS - len(login_attempts[ip])
-            await websocket.send_json({
-                "status": "error",
-                "message": f"{attempts_left} more attempts before lockout."
+            if is_locked_out(ip):
+                await websocket.send_json({"status": "error", "message": "Try again later."})
+            else:
+                attempts_left = MAX_ATTEMPTS - len(login_attempts[ip])
+                await websocket.send_json({
+                    "status": "error",
+                    "message": f"{attempts_left} attempts left."
          })
 
     except Exception as e:
