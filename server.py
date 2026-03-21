@@ -18,6 +18,7 @@ last_message_times = {}
 RATE_LIMIT_SECONDS = 1
 MAX_ATTEMPTS = 5
 LOCKOUT_TIME = 900 #in seconds
+login_attempts = defaultdict(list)
 
 def is_locked_out(ip: str) -> bool:
     now = time.time()
@@ -57,7 +58,7 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("New client connected.")
     current_user = None
-    ip = websocket.client.host
+    ip = (websocket.client.host if websocket.client else websocket.headers.get("x-forwarded-for", "unknown"))
 
     try:
         data = await websocket.receive_json()
