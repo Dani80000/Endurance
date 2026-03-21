@@ -219,60 +219,64 @@
         }
 
         eel.expose(receiveMessageUI);
-        function receiveMessageUI(sender, text, channel = "General") {
-            if (!chatData[channel]) chatData[channel] = "";
+function receiveMessageUI(sender, text, channel = "General") {
+    if (!chatData[channel]) chatData[channel] = "";
 
-            let cls = "msg";
-            if (sender === "SYSTEM") cls += " system";
-            else if (sender === myUsername) cls += " self";
-            else cls += " other";
+    let cls = "msg";
+    if (sender === "SYSTEM") cls += " system";
+    else if (sender === myUsername) cls += " self";
+    else cls += " other";
 
-            let displayContent = formatMessage(text);
-            if (typeof text === 'object' && text !== null && text.type === 'file') {
-                displayContent = `<a href="${text.data}" download="${text.filename}" style="color: #3cff88; text-decoration: underline;"> Download ${text.filename}</a>`;
-            }
+    let displayContent;
+    if (typeof text === 'object' && text !== null && text.type === 'file') {
+        displayContent = `<a href="${text.data}" download="${text.filename}" style="color: #3cff88; text-decoration: underline;">Download ${text.filename}</a>`;
+    } else {
+        displayContent = formatMessage(String(text ?? ""));
+    }
 
-            chatData[channel] += `
-                <div class="${cls}">
-                    <b>${capitalizeName(sender)}</b>: ${displayContent}
-                </div>
-            `;
+    chatData[channel] += `
+        <div class="${cls}">
+            <b>${capitalizeName(sender)}</b>: ${displayContent}
+        </div>
+    `;
 
-            if (channel === currentChannel) {
-                refreshChatBox();
-            }
+    if (channel === currentChannel) {
+        refreshChatBox();
+    }
+}
+
+eel.expose(receiveHistoryUI);
+function receiveHistoryUI(channel, history) {
+    let html = "";
+
+    history.forEach(msg => {
+        let cls = "msg";
+        if (msg.sender === "SYSTEM") cls += " system";
+        else if (msg.sender === myUsername) cls += " self";
+        else cls += " other";
+
+        let displayContent;
+        if (typeof msg.message === 'object' && msg.message !== null && msg.message.type === 'file') {
+            displayContent = `<a href="${msg.message.data}" download="${msg.message.filename}" style="color: #3cff88; text-decoration: underline;">Download ${msg.message.filename}</a>`;
+        } else {
+            displayContent = formatMessage(String(msg.message ?? ""));
         }
 
-        eel.expose(receiveHistoryUI);
-        function receiveHistoryUI(channel, history) {
-            let html = "";
+        html += `
+            <div class="${cls}">
+                <b>${capitalizeName(msg.sender)}</b>: ${displayContent}
+            </div>
+        `;
+    });
 
-            history.forEach(msg => {
-                let cls = "msg";
-                if (msg.sender === "SYSTEM") cls += " system";
-                else if (msg.sender === myUsername) cls += " self";
-                else cls += " other";
+    chatData[channel] = html;
 
-                let displayContent = formatMessage(msg.message);
-                if (typeof msg.message === 'object' && msg.message !== null && msg.message.type === 'file') {
-                    displayContent = `<a href="${msg.message.data}" download="${msg.message.filename}" style="color: #3cff88; text-decoration: underline;">Download ${msg.message.filename}</a>`;
-                }
-
-                html += `
-                    <div class="${cls}">
-                        <b>${capitalizeName(msg.sender)}</b>: ${displayContent}
-                    </div>
-                `;
-            });
-
-            chatData[channel] = html;
-
-            if (channel === currentChannel) {
-                let historyBox = document.getElementById("chat-history");
-                historyBox.innerHTML = html;
-                historyBox.scrollTop = historyBox.scrollHeight;
-            }
-        }
+    if (channel === currentChannel) {
+        let historyBox = document.getElementById("chat-history");
+        historyBox.innerHTML = html;
+        historyBox.scrollTop = historyBox.scrollHeight;
+    }
+}
     </script>
 
 </body>
