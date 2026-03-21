@@ -1,5 +1,7 @@
 websockets 
-cryptography 
+cryptography
+python-dotenv
 asyncio
 fastapi
 uvicorn
+eel
