@@ -1,7 +1,9 @@
 import os
 import json
 import time
+from bottle_websocket import websocket
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from collections import defaultdict
 import uvicorn
 import accounts
 import connections
@@ -13,7 +15,18 @@ if not os.path.exists("messages"):
 
 active_connections = {}
 last_message_times = {}
-RATE_LIMIT_SECONDS = 1 
+RATE_LIMIT_SECONDS = 1
+MAX_ATTEMPTS = 5
+LOCKOUT_TIME = 900 #in seconds
+
+def is_locked_out(ip: str) -> bool:
+    now = time.time()
+    login_attempts[ip] = [t for t in login_attempts[ip] if now - t < LOCKOUT_TIME]
+    return len(login_attempts[ip]) >= MAX_ATTEMPTS
+
+def record_failed_attempt(ip: str):
+    login_attempts[ip].append(time.time())
+
 
 @app.get("/")
 @app.head("/")
@@ -44,6 +57,7 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("New client connected.")
     current_user = None
+    ip = websocket.client.host
 
     try:
         data = await websocket.receive_json()
@@ -61,8 +75,12 @@ async def websocket_endpoint(websocket: WebSocket):
             return 
 
         print(f"Login attempt: {user_id}")
+        if is_locked_out(ip):
+            await websocket.send_json({"status": "error", "message": "You have been locked out. Try again later."})
+            return
         if connections.connect(user_id, password):
-            
+
+            login_attempts[ip] = []
             active_connections[websocket] = user_id
             current_user = user_id
             
@@ -140,7 +158,12 @@ async def websocket_endpoint(websocket: WebSocket):
                 for conn in list(active_connections.keys()):
                     await conn.send_json({"sender": "SYSTEM", "message": f"{user_id} left.", "channel": "General"})
         else:
-            await websocket.send_json({"status": "error", "message": "Login Failed"})
+            record_failed_attempt(ip)
+            attempts_left = MAX_ATTEMPTS - len(login_attempts[ip])
+            await websocket.send_json({
+                "status": "error",
+                "message": f"{attempts_left} more attempts before lockout."
+         })
 
     except Exception as e:
         print(f"Error: {e}")
