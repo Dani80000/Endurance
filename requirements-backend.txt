@@ -2,3 +2,4 @@ cryptography
 python-dotenv
 fastapi
 uvicorn
+websockets
