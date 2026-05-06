@@ -17,6 +17,8 @@ const els = {
     history: document.getElementById("chat-history"),
     message: document.getElementById("message-input"),
     send: document.getElementById("send-button"),
+    fileInput: document.getElementById("file-input"),
+    fileButton: document.getElementById("file-button"),
     dmUser: document.getElementById("dm-user-input"),
     dm: document.getElementById("dm-button"),
     serverButton: document.getElementById("server-button"),
@@ -58,6 +60,16 @@ function formatMessage(text) {
     return richText.replace(/\n/g, "<br>");
 }
 
+function formatPayload(content) {
+    if (typeof content === "object" && content !== null && content.type === "file") {
+        const filename = escapeHtml(content.filename || "file");
+        const data = String(content.data || "");
+        return `<a href="${data}" download="${filename}">Download ${filename}</a>`;
+    }
+
+    return formatMessage(content);
+}
+
 function normalizeDmChannel(user1, user2) {
     return `dm_${[user1.trim().toLowerCase(), user2.trim().toLowerCase()].sort().join("_")}`;
 }
@@ -72,7 +84,7 @@ function renderMessage(message) {
     else if (sender === state.username) div.classList.add("self");
     else div.classList.add("other");
 
-    div.innerHTML = `<b>${capitalizeName(escapeHtml(sender))}</b>: ${formatMessage(content)}`;
+    div.innerHTML = `<b>${capitalizeName(escapeHtml(sender))}</b>: ${formatPayload(content)}`;
     return div;
 }
 
@@ -98,6 +110,7 @@ function switchToChat() {
     state.currentChannel = "General";
     els.chatTitle.textContent = "Server";
     refreshChat();
+    startHeartbeat();
 }
 
 function requestHistory(channel) {
@@ -163,6 +176,10 @@ function connect(action) {
             return;
         }
 
+        if (data.action === "pong") {
+            return;
+        }
+
         if (data.action === "history_update") {
             state.chatData[data.channel || "General"] = data.history || [];
             refreshChat();
@@ -189,6 +206,18 @@ function connect(action) {
     });
 }
 
+function startHeartbeat() {
+    window.clearInterval(state.heartbeatId);
+    state.heartbeatId = window.setInterval(() => {
+        if (state.socket?.readyState === WebSocket.OPEN) {
+            state.socket.send(JSON.stringify({
+                action: "ping",
+                channel: state.currentChannel,
+            }));
+        }
+    }, 25000);
+}
+
 function sendMessage() {
     const text = els.message.value;
     if (!text.trim() || state.socket?.readyState !== WebSocket.OPEN) return;
@@ -201,6 +230,30 @@ function sendMessage() {
     }));
     pushMessage({ sender: state.username, message: text, channel: state.currentChannel });
     els.message.value = "";
+}
+
+function sendFile() {
+    const file = els.fileInput.files[0];
+    if (!file || state.socket?.readyState !== WebSocket.OPEN) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+        const payload = {
+            type: "file",
+            filename: file.name,
+            data: reader.result,
+        };
+
+        state.socket.send(JSON.stringify({
+            action: "send_message",
+            user_id: state.username,
+            message: payload,
+            channel: state.currentChannel,
+        }));
+        pushMessage({ sender: state.username, message: payload, channel: state.currentChannel });
+        els.fileInput.value = "";
+    };
+    reader.readAsDataURL(file);
 }
 
 function switchToServer() {
@@ -224,6 +277,7 @@ function switchToDm() {
 els.login.addEventListener("click", () => connect("login"));
 els.create.addEventListener("click", () => connect("create"));
 els.send.addEventListener("click", sendMessage);
+els.fileButton.addEventListener("click", sendFile);
 els.serverButton.addEventListener("click", switchToServer);
 els.dm.addEventListener("click", switchToDm);
 els.logout.addEventListener("click", () => {

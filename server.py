@@ -130,6 +130,13 @@ async def handle_chat_websocket(websocket: WebSocket):
                     channel = normalize_channel_name(payload.get("channel", "General"))
                     payload["channel"] = channel
 
+                    if action == "ping":
+                        await websocket.send_json({
+                            "action": "pong",
+                            "channel": channel
+                        })
+                        continue
+
                     if action == "get_history":
                         history = connections.join_channel(current_user, channel)
                         await websocket.send_json({

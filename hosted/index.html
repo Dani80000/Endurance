@@ -5,8 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecureChat Hosted Client</title>
-    <link rel="stylesheet" href="style.css?v=6">
-    <script src="config.js?v=6"></script>
+    <link rel="stylesheet" href="style.css?v=7">
+    <script src="config.js?v=7"></script>
 </head>
 
 <body>
@@ -50,6 +50,11 @@
 
             <div id="chat-history" aria-live="polite"></div>
 
+            <div class="file-row">
+                <input type="file" id="file-input">
+                <button id="file-button" class="secondary">Send File</button>
+            </div>
+
             <div class="composer">
                 <textarea id="message-input" rows="3" placeholder="Type a message. Shift + Enter adds a new line."></textarea>
                 <button id="send-button">Send</button>
@@ -57,7 +62,7 @@
         </section>
     </main>
 
-    <script src="app.js?v=6"></script>
+    <script src="app.js?v=7"></script>
 </body>
 
 </html>

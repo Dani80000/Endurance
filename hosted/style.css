@@ -128,6 +128,7 @@ button.secondary {
 
 .actions,
 .dm-controls,
+.file-row,
 .composer,
 .chat-topbar {
     display: flex;
@@ -195,6 +196,11 @@ button.secondary {
     color: var(--accent);
 }
 
+.msg a {
+    color: var(--accent-2);
+    font-weight: 700;
+}
+
 .composer {
     align-items: stretch;
 }
@@ -216,6 +222,7 @@ button.secondary {
 
     .actions,
     .dm-controls,
+    .file-row,
     .composer,
     .chat-topbar {
         align-items: stretch;
