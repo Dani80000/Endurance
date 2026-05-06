@@ -155,6 +155,10 @@ function connect(action) {
             return;
         }
 
+        if (data.sender === state.username) {
+            return;
+        }
+
         pushMessage(data);
     });
 
