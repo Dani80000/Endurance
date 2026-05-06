@@ -5,8 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecureChat Hosted Client</title>
-    <link rel="stylesheet" href="style.css?v=9">
-    <script src="config.js?v=9"></script>
+    <link rel="stylesheet" href="style.css?v=10">
+    <script src="config.js?v=10"></script>
 </head>
 
 <body>
@@ -67,12 +67,16 @@
 
             <div class="composer">
                 <textarea id="message-input" rows="3" placeholder="Type a message. Shift + Enter adds a new line."></textarea>
+                <div class="emoji-wrap">
+                    <button id="emoji-button" class="secondary emoji-button" title="Open emoji picker" type="button">:)</button>
+                    <div id="emoji-picker" class="emoji-picker" hidden></div>
+                </div>
                 <button id="send-button">Send</button>
             </div>
         </section>
     </main>
 
-    <script src="app.js?v=9"></script>
+    <script src="app.js?v=10"></script>
 </body>
 
 </html>

@@ -28,6 +28,8 @@ const els = {
     typing: document.getElementById("typing-status"),
     message: document.getElementById("message-input"),
     send: document.getElementById("send-button"),
+    emojiButton: document.getElementById("emoji-button"),
+    emojiPicker: document.getElementById("emoji-picker"),
     fileInput: document.getElementById("file-input"),
     fileButton: document.getElementById("file-button"),
     dmUser: document.getElementById("dm-user-input"),
@@ -35,6 +37,15 @@ const els = {
     serverButton: document.getElementById("server-button"),
     logout: document.getElementById("logout-button"),
 };
+
+const emojiList = [
+    "🙂", "😀", "😂", "🤣", "😊", "😍", "😎",
+    "🥳", "😅", "😭", "😤", "😡", "🤔", "🙃",
+    "👍", "👎", "👏", "🙌", "🙏", "💪", "🤝",
+    "❤️", "🔥", "✨", "✅", "❌", "⚠️", "💯",
+    "💀", "👀", "🎉", "🚀", "🍕", "☕", "💻",
+    "📎", "🔒", "🔑", "🛡️", "📣", "🧠", "🐛"
+];
 
 function getWebSocketUrl() {
     if (window.SECURECHAT_WS_URL) {
@@ -316,6 +327,33 @@ function sendTyping() {
     }, 250);
 }
 
+function renderEmojiPicker() {
+    els.emojiPicker.innerHTML = "";
+    emojiList.forEach(emoji => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "emoji-option";
+        button.textContent = emoji;
+        button.addEventListener("click", () => insertEmoji(emoji));
+        els.emojiPicker.appendChild(button);
+    });
+}
+
+function insertEmoji(emoji) {
+    const input = els.message;
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? input.value.length;
+    input.value = `${input.value.slice(0, start)}${emoji}${input.value.slice(end)}`;
+    input.focus();
+    input.selectionStart = input.selectionEnd = start + emoji.length;
+    els.emojiPicker.hidden = true;
+}
+
+function toggleEmojiPicker(event) {
+    event.stopPropagation();
+    els.emojiPicker.hidden = !els.emojiPicker.hidden;
+}
+
 function sendFile() {
     const file = els.fileInput.files[0];
     if (!file || state.socket?.readyState !== WebSocket.OPEN) return;
@@ -361,6 +399,7 @@ function switchToDm(selectedUser = "") {
 els.login.addEventListener("click", () => connect("login"));
 els.create.addEventListener("click", () => connect("create"));
 els.send.addEventListener("click", sendMessage);
+els.emojiButton.addEventListener("click", toggleEmojiPicker);
 els.fileButton.addEventListener("click", sendFile);
 els.serverButton.addEventListener("click", switchToServer);
 els.dm.addEventListener("click", switchToDm);
@@ -386,3 +425,11 @@ els.message.addEventListener("keydown", event => {
 els.dmUser.addEventListener("keydown", event => {
     if (event.key === "Enter") switchToDm();
 });
+
+document.addEventListener("click", event => {
+    if (!els.emojiPicker.hidden && !els.emojiPicker.contains(event.target) && event.target !== els.emojiButton) {
+        els.emojiPicker.hidden = true;
+    }
+});
+
+renderEmojiPicker();

@@ -271,11 +271,59 @@ button.secondary {
 }
 
 .composer {
+    position: relative;
     align-items: stretch;
 }
 
 .composer button {
     min-width: 104px;
+}
+
+.emoji-wrap {
+    position: relative;
+    display: flex;
+}
+
+.emoji-button {
+    min-width: 54px;
+    padding-inline: 14px;
+}
+
+.emoji-picker {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 10px);
+    width: min(320px, calc(100vw - 48px));
+    max-height: 220px;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: rgba(4, 12, 8, 0.96);
+    box-shadow: var(--shadow);
+    z-index: 10;
+}
+
+.emoji-picker[hidden] {
+    display: none;
+}
+
+.emoji-option {
+    min-width: 0;
+    border-radius: 12px;
+    padding: 8px;
+    color: var(--text);
+    background: transparent;
+    font-size: 1.25rem;
+    line-height: 1;
+}
+
+.emoji-option:hover {
+    background: rgba(86, 243, 154, 0.18);
+    color: var(--text);
 }
 
 @media (max-width: 720px) {
@@ -300,6 +348,16 @@ button.secondary {
 
     button {
         width: 100%;
+    }
+
+    .emoji-wrap {
+        width: 100%;
+    }
+
+    .emoji-picker {
+        left: 0;
+        right: auto;
+        grid-template-columns: repeat(6, 1fr);
     }
 
     .chat-layout {
