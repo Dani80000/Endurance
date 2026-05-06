@@ -44,6 +44,14 @@ async def health():
     return {"status": "ok"}
 
 
+@app.get("/routes")
+async def routes():
+    return [
+        {"path": route.path, "name": route.name, "type": route.__class__.__name__}
+        for route in app.routes
+    ]
+
+
 def normalize_dm_channel(user1: str, user2: str) -> str:
     a, b = sorted([user1.strip().lower(), user2.strip().lower()])
     return f"dm_{a}_{b}"
@@ -63,8 +71,16 @@ def normalize_channel_name(channel: str) -> str:
 
 
 @app.websocket("/")
+async def websocket_endpoint_root(websocket: WebSocket):
+    await handle_chat_websocket(websocket)
+
+
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint_ws(websocket: WebSocket):
+    await handle_chat_websocket(websocket)
+
+
+async def handle_chat_websocket(websocket: WebSocket):
     await websocket.accept()
     print("New client connected.")
     current_user = None
