@@ -93,7 +93,9 @@ function pushMessage(message) {
 
 function switchToChat() {
     els.loginSection.hidden = true;
+    els.loginSection.style.display = "none";
     els.chatSection.hidden = false;
+    els.chatSection.style.display = "grid";
     state.currentChannel = "General";
     els.chatTitle.textContent = "Server";
     refreshChat();
