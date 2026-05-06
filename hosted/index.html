@@ -5,8 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecureChat Hosted Client</title>
-    <link rel="stylesheet" href="style.css?v=7">
-    <script src="config.js?v=7"></script>
+    <link rel="stylesheet" href="style.css?v=8">
+    <script src="config.js?v=8"></script>
 </head>
 
 <body>
@@ -39,6 +39,10 @@
                     <p class="eyebrow">Room</p>
                     <h2 id="chat-title">Server</h2>
                 </div>
+                <div class="presence-card">
+                    <p class="eyebrow">Online</p>
+                    <p id="presence-list">Just you</p>
+                </div>
                 <button id="logout-button" class="secondary">Disconnect</button>
             </div>
 
@@ -49,6 +53,7 @@
             </div>
 
             <div id="chat-history" aria-live="polite"></div>
+            <p id="typing-status" class="typing-status"></p>
 
             <div class="file-row">
                 <input type="file" id="file-input">
@@ -62,7 +67,7 @@
         </section>
     </main>
 
-    <script src="app.js?v=7"></script>
+    <script src="app.js?v=8"></script>
 </body>
 
 </html>

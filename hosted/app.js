@@ -1,8 +1,17 @@
 const state = {
     socket: null,
     username: "",
+    password: "",
+    loggedIn: false,
+    intentionallyClosed: false,
+    reconnectAttempts: 0,
     currentChannel: "General",
     chatData: { General: [] },
+    presence: [],
+    heartbeatId: null,
+    reconnectId: null,
+    typingSendId: null,
+    typingClearId: null,
 };
 
 const els = {
@@ -14,7 +23,9 @@ const els = {
     loginSection: document.getElementById("login-section"),
     chatSection: document.getElementById("chat-section"),
     chatTitle: document.getElementById("chat-title"),
+    presence: document.getElementById("presence-list"),
     history: document.getElementById("chat-history"),
+    typing: document.getElementById("typing-status"),
     message: document.getElementById("message-input"),
     send: document.getElementById("send-button"),
     fileInput: document.getElementById("file-input"),
@@ -99,6 +110,11 @@ function refreshChat() {
     els.history.scrollTop = els.history.scrollHeight;
 }
 
+function refreshPresence() {
+    const users = state.presence.length ? state.presence : [state.username];
+    els.presence.textContent = users.map(capitalizeName).join(", ");
+}
+
 function pushMessage(message) {
     const channel = message.channel || "General";
     if (!state.chatData[channel]) state.chatData[channel] = [];
@@ -113,6 +129,7 @@ function switchToChat() {
     els.chatSection.style.display = "grid";
     state.currentChannel = "General";
     els.chatTitle.textContent = "Server";
+    refreshPresence();
     refreshChat();
     startHeartbeat();
 }
@@ -123,7 +140,7 @@ function requestHistory(channel) {
     }
 }
 
-function connect(action) {
+function connect(action, isReconnect = false) {
     const username = els.username.value.trim().toLowerCase();
     const password = els.password.value;
     const url = getWebSocketUrl();
@@ -133,8 +150,13 @@ function connect(action) {
         return;
     }
 
-    setStatus("Connecting...");
+    if (action === "login") {
+        state.password = password;
+    }
+
+    setStatus(isReconnect ? "Reconnecting..." : "Connecting...");
     state.username = username;
+    state.intentionallyClosed = false;
 
     const socket = new WebSocket(url);
     state.socket = socket;
@@ -169,6 +191,8 @@ function connect(action) {
             }
 
             setStatus(data.message || "Connected.");
+            state.loggedIn = true;
+            state.reconnectAttempts = 0;
             state.chatData.General = data.history || [];
             switchToChat();
             return;
@@ -181,6 +205,21 @@ function connect(action) {
         }
 
         if (data.action === "pong") {
+            return;
+        }
+
+        if (data.action === "presence_update") {
+            state.presence = data.users || [];
+            refreshPresence();
+            return;
+        }
+
+        if (data.action === "typing" && data.sender !== state.username && data.channel === state.currentChannel) {
+            els.typing.textContent = `${capitalizeName(data.sender)} is typing...`;
+            window.clearTimeout(state.typingClearId);
+            state.typingClearId = window.setTimeout(() => {
+                els.typing.textContent = "";
+            }, 2200);
             return;
         }
 
@@ -198,9 +237,13 @@ function connect(action) {
     });
 
     socket.addEventListener("close", () => {
+        window.clearTimeout(connectTimeoutId);
+        window.clearTimeout(authTimeoutId);
+        window.clearInterval(state.heartbeatId);
         if (!els.chatSection.hidden) {
             pushMessage({ sender: "SYSTEM", message: "Disconnected from server.", channel: state.currentChannel });
         }
+        scheduleReconnect();
     });
 
     socket.addEventListener("error", () => {
@@ -222,6 +265,20 @@ function startHeartbeat() {
     }, 25000);
 }
 
+function scheduleReconnect() {
+    if (!state.loggedIn || state.intentionallyClosed || state.reconnectAttempts >= 5) return;
+
+    state.reconnectAttempts += 1;
+    const delay = Math.min(30000, 1000 * (2 ** (state.reconnectAttempts - 1)));
+    window.clearTimeout(state.reconnectId);
+    state.reconnectId = window.setTimeout(() => {
+        if (state.socket?.readyState === WebSocket.OPEN) return;
+        els.username.value = state.username;
+        els.password.value = state.password;
+        connect("login", true);
+    }, delay);
+}
+
 function sendMessage() {
     const text = els.message.value;
     if (!text.trim() || state.socket?.readyState !== WebSocket.OPEN) return;
@@ -234,6 +291,18 @@ function sendMessage() {
     }));
     pushMessage({ sender: state.username, message: text, channel: state.currentChannel });
     els.message.value = "";
+}
+
+function sendTyping() {
+    if (state.socket?.readyState !== WebSocket.OPEN) return;
+
+    window.clearTimeout(state.typingSendId);
+    state.typingSendId = window.setTimeout(() => {
+        state.socket.send(JSON.stringify({
+            action: "typing",
+            channel: state.currentChannel,
+        }));
+    }, 250);
 }
 
 function sendFile() {
@@ -285,6 +354,8 @@ els.fileButton.addEventListener("click", sendFile);
 els.serverButton.addEventListener("click", switchToServer);
 els.dm.addEventListener("click", switchToDm);
 els.logout.addEventListener("click", () => {
+    state.intentionallyClosed = true;
+    state.loggedIn = false;
     state.socket?.close();
     window.location.reload();
 });
@@ -294,6 +365,7 @@ els.password.addEventListener("keydown", event => {
 });
 
 els.message.addEventListener("keydown", event => {
+    sendTyping();
     if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         sendMessage();

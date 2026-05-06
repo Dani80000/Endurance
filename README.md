@@ -85,6 +85,14 @@ Use `wss://` for hosted HTTPS sites. Browsers usually block insecure `ws://` con
 - DM channel names are normalized so both users share the same private channel.
 - Stored channel filenames are sanitized before writing message history.
 
+Note: current encryption is server-side encryption at rest. The server can decrypt messages in order to return readable chat history. True end-to-end encryption would require client-side encryption before messages leave the browser.
+
+## Reliability and Presence
+- The hosted client sends heartbeat pings to keep WebSocket connections active.
+- The server replies with pong messages and broadcasts online user presence.
+- The hosted client displays online users and typing indicators.
+- The hosted client attempts automatic reconnects after unexpected disconnects.
+
 ## Deliverables
 A video presentation showing the following:
 An explanation of the functionality of the programs

@@ -158,6 +158,19 @@ button.secondary {
     justify-content: space-between;
 }
 
+.presence-card {
+    min-width: 140px;
+    padding: 10px 14px;
+    border: 1px solid rgba(237, 247, 239, 0.12);
+    border-radius: 16px;
+    background: rgba(4, 12, 8, 0.38);
+}
+
+.presence-card p:last-child {
+    margin: 0;
+    color: var(--muted);
+}
+
 #chat-history {
     min-height: 360px;
     max-height: 52vh;
@@ -199,6 +212,13 @@ button.secondary {
 .msg a {
     color: var(--accent-2);
     font-weight: 700;
+}
+
+.typing-status {
+    min-height: 20px;
+    margin: -6px 0 0;
+    color: var(--muted);
+    font-style: italic;
 }
 
 .composer {

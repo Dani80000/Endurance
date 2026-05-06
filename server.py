@@ -28,6 +28,32 @@ def record_failed_attempt(ip: str):
     login_attempts[ip].append(time.time())
 
 
+async def broadcast_presence():
+    users = sorted(set(active_connections.values()))
+    for conn in list(active_connections.keys()):
+        await conn.send_json({
+            "action": "presence_update",
+            "users": users,
+            "channel": "General"
+        })
+
+
+async def broadcast_to_channel(payload, channel, current_user=None):
+    if channel == "General":
+        for conn in list(active_connections.keys()):
+            await conn.send_json(payload)
+        return
+
+    if channel.lower().startswith("dm_"):
+        allowed_users = channel.lower().split("_")[1:]
+        if current_user and current_user not in allowed_users:
+            return
+
+        for conn, c_user_id in list(active_connections.items()):
+            if c_user_id in allowed_users:
+                await conn.send_json(payload)
+
+
 @app.get("/")
 @app.head("/")
 async def root():
@@ -122,6 +148,7 @@ async def handle_chat_websocket(websocket: WebSocket):
             for conn in list(active_connections.keys()):
                 if conn != websocket:
                     await conn.send_json({"sender": "SYSTEM", "message": f"{user_id} joined the chat.", "channel": "General"})
+            await broadcast_presence()
 
             try:
                 while True:
@@ -135,6 +162,14 @@ async def handle_chat_websocket(websocket: WebSocket):
                             "action": "pong",
                             "channel": channel
                         })
+                        continue
+
+                    if action == "typing":
+                        await broadcast_to_channel({
+                            "action": "typing",
+                            "sender": current_user,
+                            "channel": channel
+                        }, channel, current_user)
                         continue
 
                     if action == "get_history":
@@ -167,8 +202,7 @@ async def handle_chat_websocket(websocket: WebSocket):
                         print(f"Failed to save message: {e}")
                     
                     if channel == "General":
-                        for conn in list(active_connections.keys()):
-                            await conn.send_json(payload)
+                        await broadcast_to_channel(payload, channel)
                     
                     elif channel.lower().startswith("dm_"):
                         allowed_users = channel.lower().split("_")[1:]
@@ -181,9 +215,7 @@ async def handle_chat_websocket(websocket: WebSocket):
                             })
                             continue
 
-                        for conn, c_user_id in list(active_connections.items()):
-                            if c_user_id in allowed_users:
-                                await conn.send_json(payload)
+                        await broadcast_to_channel(payload, channel, current_user)
                             
             except WebSocketDisconnect:
                 print(f"{user_id} disconnected")
@@ -192,6 +224,7 @@ async def handle_chat_websocket(websocket: WebSocket):
                     del last_message_times[user_id]
                 for conn in list(active_connections.keys()):
                     await conn.send_json({"sender": "SYSTEM", "message": f"{user_id} left.", "channel": "General"})
+                await broadcast_presence()
         else:
             record_failed_attempt(ip)
             if is_locked_out(ip):
@@ -206,7 +239,9 @@ async def handle_chat_websocket(websocket: WebSocket):
     except Exception as e:
         print(f"Error: {e}")
     finally:
-        if websocket in active_connections: del active_connections[websocket]
+        if websocket in active_connections:
+            del active_connections[websocket]
+            await broadcast_presence()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
