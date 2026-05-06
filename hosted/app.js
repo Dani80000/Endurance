@@ -28,8 +28,7 @@ function getWebSocketUrl() {
         return window.SECURECHAT_WS_URL;
     }
 
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    return `${protocol}//${window.location.host}/`;
+    return "wss://secure-chat-bs75.onrender.com/ws";
 }
 
 function setStatus(message, isError = false) {
@@ -122,8 +121,15 @@ function connect(action) {
 
     const socket = new WebSocket(url);
     state.socket = socket;
+    const timeoutId = window.setTimeout(() => {
+        if (socket.readyState === WebSocket.CONNECTING) {
+            socket.close();
+            setStatus("Connection timed out. Check that config.js points to the Render /ws URL.", true);
+        }
+    }, 10000);
 
     socket.addEventListener("open", () => {
+        window.clearTimeout(timeoutId);
         socket.send(JSON.stringify({ action, user_id: username, password, channel: "General" }));
     });
 
@@ -169,6 +175,7 @@ function connect(action) {
     });
 
     socket.addEventListener("error", () => {
+        window.clearTimeout(timeoutId);
         setStatus("Could not connect to the WebSocket server.", true);
     });
 }
