@@ -28,7 +28,7 @@ Create a `.env` file:
 
 ```bash
 MESSAGE_ENCRYPTION_KEY=your_fernet_key_here
-SECURECHAT_WS_URL=ws://localhost:10000
+SECURECHAT_WS_URL=ws://localhost:10000/ws
 ```
 
 Generate a Fernet key:
@@ -72,7 +72,7 @@ Upload the files inside `hosted/` to InfinityFree or another static web host.
 Set the WebSocket backend URL in `hosted/config.js`:
 
 ```javascript
-window.SECURECHAT_WS_URL = "wss://your-python-backend.example.com";
+window.SECURECHAT_WS_URL = "wss://your-python-backend.example.com/ws";
 ```
 
 Use `wss://` for hosted HTTPS sites. Browsers usually block insecure `ws://` connections from HTTPS pages.

@@ -33,7 +33,7 @@ def record_failed_attempt(ip: str):
 async def root():
     return {
         "status": "Live and waiting for connections",
-        "websocket": "/",
+        "websocket": "/ws",
         "client": "Host the files in hosted/ on any static web host.",
     }
 
@@ -63,6 +63,7 @@ def normalize_channel_name(channel: str) -> str:
 
 
 @app.websocket("/")
+@app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("New client connected.")
