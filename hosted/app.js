@@ -9,7 +9,6 @@ const els = {
     username: document.getElementById("username"),
     password: document.getElementById("password"),
     status: document.getElementById("status-text"),
-    server: document.getElementById("server-text"),
     login: document.getElementById("login-button"),
     create: document.getElementById("create-button"),
     loginSection: document.getElementById("login-section"),
@@ -117,7 +116,6 @@ function connect(action) {
     }
 
     setStatus("Connecting...");
-    els.server.textContent = `WebSocket: ${url}`;
     state.username = username;
 
     const socket = new WebSocket(url);
@@ -229,5 +227,3 @@ els.message.addEventListener("keydown", event => {
 els.dmUser.addEventListener("keydown", event => {
     if (event.key === "Enter") switchToDm();
 });
-
-els.server.textContent = `WebSocket: ${getWebSocketUrl()}`;

@@ -82,6 +82,10 @@ h2 {
     backdrop-filter: blur(18px);
 }
 
+.panel[hidden] {
+    display: none;
+}
+
 .panel label {
     display: grid;
     gap: 8px;
@@ -142,11 +146,6 @@ button.secondary {
 
 .status.error {
     color: var(--danger);
-}
-
-.server {
-    color: var(--muted);
-    font-size: 0.9rem;
 }
 
 .chat-panel {
