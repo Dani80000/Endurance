@@ -79,7 +79,7 @@ Use `wss://` for hosted HTTPS sites. Browsers usually block insecure `ws://` con
 
 ## Security Features
 - Passwords are hashed with Scrypt and per-user salts.
-- Stored text messages are encrypted with Fernet before being saved.
+- Stored text messages and uploaded file data are encrypted with Fernet before being saved.
 - WebSocket login attempts are rate-limited by IP.
 - Chat messages are rate-limited per user.
 - DM channel names are normalized so both users share the same private channel.

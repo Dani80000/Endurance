@@ -31,6 +31,13 @@ def save_message_to_json(payload):
     if isinstance(message, str) and message.strip():
         payload_to_store["message"] = encrypt_message(message)
         payload_to_store["encrypted"] = True
+    elif isinstance(message, dict) and message.get("type") == "file":
+        file_data = message.get("data")
+        if isinstance(file_data, str) and file_data.strip():
+            payload_to_store["message"] = dict(message)
+            payload_to_store["message"]["data"] = encrypt_message(file_data)
+            payload_to_store["message"]["encrypted_data"] = True
+            payload_to_store["encrypted"] = True
 
     history.append(payload_to_store)
 
@@ -51,12 +58,22 @@ def join_channel(user_id, channel):
                 msg_copy = dict(msg)
 
                 if msg_copy.get("encrypted") is True:
-                    encrypted_text = msg_copy.get("message", "")
-                    if isinstance(encrypted_text, str) and encrypted_text.strip():
+                    stored_message = msg_copy.get("message", "")
+                    if isinstance(stored_message, str) and stored_message.strip():
                         try:
-                            msg_copy["message"] = decrypt_message(encrypted_text)
+                            msg_copy["message"] = decrypt_message(stored_message)
                         except Exception:
                             msg_copy["message"] = "[Unable to decrypt stored message]"
+                    elif isinstance(stored_message, dict) and stored_message.get("type") == "file":
+                        encrypted_file_data = stored_message.get("data", "")
+                        if stored_message.get("encrypted_data") is True and isinstance(encrypted_file_data, str) and encrypted_file_data.strip():
+                            msg_copy["message"] = dict(stored_message)
+                            try:
+                                msg_copy["message"]["data"] = decrypt_message(encrypted_file_data)
+                                msg_copy["message"].pop("encrypted_data", None)
+                            except Exception:
+                                msg_copy["message"]["data"] = ""
+                                msg_copy["message"]["download_error"] = "Unable to decrypt stored file"
 
                 decrypted_history.append(msg_copy)
 

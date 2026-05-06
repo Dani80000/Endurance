@@ -62,6 +62,10 @@ function formatMessage(text) {
 
 function formatPayload(content) {
     if (typeof content === "object" && content !== null && content.type === "file") {
+        if (content.download_error) {
+            return escapeHtml(content.download_error);
+        }
+
         const filename = escapeHtml(content.filename || "file");
         const data = String(content.data || "");
         return `<a href="${data}" download="${filename}">Download ${filename}</a>`;
