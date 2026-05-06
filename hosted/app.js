@@ -121,19 +121,27 @@ function connect(action) {
 
     const socket = new WebSocket(url);
     state.socket = socket;
-    const timeoutId = window.setTimeout(() => {
+    const connectTimeoutId = window.setTimeout(() => {
         if (socket.readyState === WebSocket.CONNECTING) {
             socket.close();
             setStatus("Connection timed out. Check that config.js points to the Render /ws URL.", true);
         }
     }, 10000);
+    const authTimeoutId = window.setTimeout(() => {
+        if (socket.readyState === WebSocket.OPEN) {
+            socket.close();
+            setStatus("Server connected but did not answer login. Check Render logs.", true);
+        }
+    }, 15000);
 
     socket.addEventListener("open", () => {
-        window.clearTimeout(timeoutId);
+        window.clearTimeout(connectTimeoutId);
+        setStatus("Authenticating...");
         socket.send(JSON.stringify({ action, user_id: username, password, channel: "General" }));
     });
 
     socket.addEventListener("message", event => {
+        window.clearTimeout(authTimeoutId);
         const data = JSON.parse(event.data);
 
         if (data.status === "success") {
@@ -175,7 +183,8 @@ function connect(action) {
     });
 
     socket.addEventListener("error", () => {
-        window.clearTimeout(timeoutId);
+        window.clearTimeout(connectTimeoutId);
+        window.clearTimeout(authTimeoutId);
         setStatus("Could not connect to the WebSocket server.", true);
     });
 }
