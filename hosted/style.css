@@ -154,21 +154,70 @@ button.secondary {
     gap: 18px;
 }
 
+.chat-layout {
+    display: grid;
+    grid-template-columns: minmax(170px, 220px) minmax(0, 1fr);
+    gap: 18px;
+    align-items: stretch;
+}
+
+.chat-main {
+    min-width: 0;
+    display: grid;
+    gap: 18px;
+}
+
 .chat-topbar {
     justify-content: space-between;
 }
 
 .presence-card {
-    min-width: 140px;
-    padding: 10px 14px;
+    min-height: 240px;
+    max-height: 640px;
+    padding: 14px;
     border: 1px solid rgba(237, 247, 239, 0.12);
-    border-radius: 16px;
+    border-radius: 22px;
     background: rgba(4, 12, 8, 0.38);
 }
 
-.presence-card p:last-child {
-    margin: 0;
+.presence-list {
+    max-height: 560px;
+    overflow-y: auto;
+    display: grid;
+    gap: 8px;
+    padding-right: 4px;
+}
+
+.presence-user {
+    width: 100%;
+    border: 1px solid rgba(86, 243, 154, 0.18);
+    border-radius: 14px;
+    padding: 10px 12px;
+    color: var(--text);
+    background: rgba(237, 247, 239, 0.08);
+    text-align: left;
+}
+
+.presence-user::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: 8px;
+    border-radius: 999px;
+    background: var(--accent);
+    box-shadow: 0 0 10px rgba(86, 243, 154, 0.75);
+}
+
+.presence-user:hover:not(:disabled) {
+    color: #031009;
+    background: var(--accent);
+}
+
+.presence-user:disabled {
     color: var(--muted);
+    cursor: default;
+    opacity: 0.74;
 }
 
 #chat-history {
@@ -251,5 +300,18 @@ button.secondary {
 
     button {
         width: 100%;
+    }
+
+    .chat-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .presence-card {
+        min-height: auto;
+        max-height: 180px;
+    }
+
+    .presence-list {
+        max-height: 120px;
     }
 }

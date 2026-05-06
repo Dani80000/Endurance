@@ -112,7 +112,18 @@ function refreshChat() {
 
 function refreshPresence() {
     const users = state.presence.length ? state.presence : [state.username];
-    els.presence.textContent = users.map(capitalizeName).join(", ");
+    els.presence.innerHTML = "";
+
+    users.forEach(user => {
+        const button = document.createElement("button");
+        const isSelf = user === state.username;
+        button.className = "presence-user";
+        button.type = "button";
+        button.textContent = isSelf ? `${capitalizeName(user)} (you)` : capitalizeName(user);
+        button.disabled = isSelf;
+        button.addEventListener("click", () => switchToDm(user));
+        els.presence.appendChild(button);
+    });
 }
 
 function pushMessage(message) {
@@ -336,8 +347,8 @@ function switchToServer() {
     refreshChat();
 }
 
-function switchToDm() {
-    const target = els.dmUser.value.trim().toLowerCase();
+function switchToDm(selectedUser = "") {
+    const target = (selectedUser || els.dmUser.value).trim().toLowerCase();
     if (!target || target === state.username) return;
 
     state.currentChannel = normalizeDmChannel(state.username, target);

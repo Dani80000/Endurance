@@ -5,8 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecureChat Hosted Client</title>
-    <link rel="stylesheet" href="style.css?v=8">
-    <script src="config.js?v=8"></script>
+    <link rel="stylesheet" href="style.css?v=9">
+    <script src="config.js?v=9"></script>
 </head>
 
 <body>
@@ -34,30 +34,35 @@
         </section>
 
         <section id="chat-section" class="panel chat-panel" hidden style="display: none;">
-            <div class="chat-topbar">
-                <div>
-                    <p class="eyebrow">Room</p>
-                    <h2 id="chat-title">Server</h2>
-                </div>
-                <div class="presence-card">
+            <div class="chat-layout">
+                <aside class="presence-card">
                     <p class="eyebrow">Online</p>
-                    <p id="presence-list">Just you</p>
+                    <div id="presence-list" class="presence-list" aria-label="Online users"></div>
+                </aside>
+
+                <div class="chat-main">
+                    <div class="chat-topbar">
+                        <div>
+                            <p class="eyebrow">Room</p>
+                            <h2 id="chat-title">Server</h2>
+                        </div>
+                        <button id="logout-button" class="secondary">Disconnect</button>
+                    </div>
+
+                    <div class="dm-controls">
+                        <input type="text" id="dm-user-input" placeholder="User to DM">
+                        <button id="dm-button">DM User</button>
+                        <button id="server-button" class="secondary">Back to Server</button>
+                    </div>
+
+                    <div id="chat-history" aria-live="polite"></div>
+                    <p id="typing-status" class="typing-status"></p>
+
+                    <div class="file-row">
+                        <input type="file" id="file-input">
+                        <button id="file-button" class="secondary">Send File</button>
+                    </div>
                 </div>
-                <button id="logout-button" class="secondary">Disconnect</button>
-            </div>
-
-            <div class="dm-controls">
-                <input type="text" id="dm-user-input" placeholder="User to DM">
-                <button id="dm-button">DM User</button>
-                <button id="server-button" class="secondary">Back to Server</button>
-            </div>
-
-            <div id="chat-history" aria-live="polite"></div>
-            <p id="typing-status" class="typing-status"></p>
-
-            <div class="file-row">
-                <input type="file" id="file-input">
-                <button id="file-button" class="secondary">Send File</button>
             </div>
 
             <div class="composer">
@@ -67,7 +72,7 @@
         </section>
     </main>
 
-    <script src="app.js?v=8"></script>
+    <script src="app.js?v=9"></script>
 </body>
 
 </html>
