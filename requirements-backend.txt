@@ -1,6 +1,4 @@
-websockets
 cryptography
 python-dotenv
 fastapi
 uvicorn
-eel

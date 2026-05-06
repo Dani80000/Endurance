@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecureChat Hosted Client</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="config.js"></script>
+</head>
+
+<body>
+    <main class="shell">
+        <section class="hero">
+            <p class="eyebrow">Endurance SecureChat</p>
+            <h1>Encrypted chat, hosted for the open web.</h1>
+            <p class="lede">Use this browser client on InfinityFree or any static host while the Python WebSocket backend runs on Render or another Python-capable host.</p>
+        </section>
+
+        <section id="login-section" class="panel">
+            <h2>Sign in</h2>
+            <label>
+                Username
+                <input type="text" id="username" autocomplete="username" placeholder="robby">
+            </label>
+            <label>
+                Password
+                <input type="password" id="password" autocomplete="current-password" placeholder="Password">
+            </label>
+            <div class="actions">
+                <button id="login-button">Login</button>
+                <button id="create-button" class="secondary">Create Account</button>
+            </div>
+            <p id="status-text" class="status"></p>
+            <p id="server-text" class="server"></p>
+        </section>
+
+        <section id="chat-section" class="panel chat-panel" hidden>
+            <div class="chat-topbar">
+                <div>
+                    <p class="eyebrow">Room</p>
+                    <h2 id="chat-title">Server</h2>
+                </div>
+                <button id="logout-button" class="secondary">Disconnect</button>
+            </div>
+
+            <div class="dm-controls">
+                <input type="text" id="dm-user-input" placeholder="User to DM">
+                <button id="dm-button">DM User</button>
+                <button id="server-button" class="secondary">Back to Server</button>
+            </div>
+
+            <div id="chat-history" aria-live="polite"></div>
+
+            <div class="composer">
+                <textarea id="message-input" rows="3" placeholder="Type a message. Shift + Enter adds a new line."></textarea>
+                <button id="send-button">Send</button>
+            </div>
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+
+</html>

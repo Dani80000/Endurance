@@ -1,6 +1,7 @@
+import os
 import websockets, asyncio, json, eel, queue
 
-RENDER_URL = "wss://secure-chat-bs75.onrender.com" 
+RENDER_URL = os.getenv("SECURECHAT_WS_URL", "wss://secure-chat-bs75.onrender.com")
 
 def normalize_dm_channel(user1, user2):
     a, b = sorted([user1.strip().lower(), user2.strip().lower()])

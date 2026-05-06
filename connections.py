@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import accounts
 from server_crypto import encrypt_message, decrypt_message
 
@@ -13,7 +14,7 @@ def save_message_to_json(payload):
         os.makedirs("messages")
 
     channel = payload.get("channel", "General")
-    safe_channel = channel.replace("/", "_").replace("\\", "_")
+    safe_channel = safe_channel_name(channel)
     filename = f"messages/{safe_channel}.json"
     
     history = []
@@ -37,7 +38,7 @@ def save_message_to_json(payload):
         json.dump(history, file, indent=4)
 
 def join_channel(user_id, channel):
-    safe_channel = channel.replace("/", "_").replace("\\", "_")
+    safe_channel = safe_channel_name(channel)
     filename = f"messages/{safe_channel}.json"
 
     if os.path.exists(filename):
@@ -65,3 +66,7 @@ def join_channel(user_id, channel):
             return []
 
     return []
+
+def safe_channel_name(channel):
+    channel = (channel or "General").strip()
+    return re.sub(r"[^A-Za-z0-9_.-]", "_", channel)[:120] or "General"

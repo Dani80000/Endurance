@@ -1,7 +1,6 @@
 import os
 import json
 import time
-from bottle_websocket import websocket
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from collections import defaultdict
 import uvicorn
@@ -32,7 +31,17 @@ def record_failed_attempt(ip: str):
 @app.get("/")
 @app.head("/")
 async def root():
-    return {"status": "Live and waiting for connections"}
+    return {
+        "status": "Live and waiting for connections",
+        "websocket": "/",
+        "client": "Host the files in hosted/ on any static web host.",
+    }
+
+
+@app.get("/health")
+@app.head("/health")
+async def health():
+    return {"status": "ok"}
 
 
 def normalize_dm_channel(user1: str, user2: str) -> str:
@@ -101,7 +110,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 while True:
                     payload = await websocket.receive_json()
                     action = payload.get("action", "send_message")
-                    channel = payload.get("channel", "General")
+                    channel = normalize_channel_name(payload.get("channel", "General"))
+                    payload["channel"] = channel
 
                     if action == "get_history":
                         history = connections.join_channel(current_user, channel)

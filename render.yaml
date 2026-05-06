@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: secure-chat
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements-backend.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: MESSAGE_ENCRYPTION_KEY
+        sync: false
