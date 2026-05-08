@@ -171,6 +171,12 @@ button.secondary {
     justify-content: space-between;
 }
 
+.room-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
 .presence-card {
     min-height: 240px;
     max-height: 640px;
@@ -340,6 +346,7 @@ button.secondary {
     .actions,
     .dm-controls,
     .file-row,
+    .room-actions,
     .composer,
     .chat-topbar {
         align-items: stretch;

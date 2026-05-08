@@ -38,6 +38,7 @@ const els = {
     dmUser: document.getElementById("dm-user-input"),
     dm: document.getElementById("dm-button"),
     serverButton: document.getElementById("server-button"),
+    switchRoom: document.getElementById("switch-room-button"),
     logout: document.getElementById("logout-button"),
 };
 
@@ -471,6 +472,36 @@ function sendTyping() {
     }, 250);
 }
 
+function leaveCurrentRoom() {
+    state.intentionallyClosed = true;
+    state.loggedIn = false;
+    state.encryptionKey = null;
+    state.roomId = "General";
+    state.currentChannel = "General";
+    state.chatData = { General: [] };
+    state.presence = [];
+    state.reconnectAttempts = 0;
+    window.clearInterval(state.heartbeatId);
+    window.clearTimeout(state.reconnectId);
+    window.clearTimeout(state.typingSendId);
+    window.clearTimeout(state.typingClearId);
+    state.socket?.close();
+}
+
+function switchRoom() {
+    leaveCurrentRoom();
+    els.chatPassphrase.value = "";
+    els.typing.textContent = "";
+    els.history.innerHTML = "";
+    els.presence.innerHTML = "";
+    els.chatSection.hidden = true;
+    els.chatSection.style.display = "none";
+    els.loginSection.hidden = false;
+    els.loginSection.style.display = "block";
+    setStatus("Enter a different chat passphrase to join another encrypted room.");
+    els.chatPassphrase.focus();
+}
+
 function renderEmojiPicker() {
     els.emojiPicker.innerHTML = "";
     emojiList.forEach(emoji => {
@@ -601,10 +632,9 @@ els.emojiButton.addEventListener("click", toggleEmojiPicker);
 els.fileButton.addEventListener("click", sendFile);
 els.serverButton.addEventListener("click", switchToServer);
 els.dm.addEventListener("click", switchToDm);
+els.switchRoom.addEventListener("click", switchRoom);
 els.logout.addEventListener("click", () => {
-    state.intentionallyClosed = true;
-    state.loggedIn = false;
-    state.socket?.close();
+    leaveCurrentRoom();
     window.location.reload();
 });
 
