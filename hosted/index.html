@@ -5,8 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecureChat Hosted Client</title>
-    <link rel="stylesheet" href="style.css?v=12">
-    <script src="config.js?v=12"></script>
+    <link rel="stylesheet" href="style.css?v=13">
+    <script src="config.js?v=13"></script>
 </head>
 
 <body>
@@ -25,6 +25,10 @@
             <label>
                 Password
                 <input type="password" id="password" autocomplete="current-password" placeholder="Password">
+            </label>
+            <label>
+                Chat Encryption Passphrase
+                <input type="password" id="chat-passphrase" autocomplete="off" placeholder="Shared chat passphrase">
             </label>
             <div class="actions">
                 <button id="login-button">Login</button>
@@ -76,7 +80,7 @@
         </section>
     </main>
 
-    <script src="app.js?v=12"></script>
+    <script src="app.js?v=13"></script>
 </body>
 
 </html>

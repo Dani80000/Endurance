@@ -79,7 +79,8 @@ Use `wss://` for hosted HTTPS sites. Browsers usually block insecure `ws://` con
 
 ## Security Features
 - Passwords are hashed with Scrypt and per-user salts.
-- Stored text messages and uploaded file data are encrypted with Fernet before being saved.
+- Hosted browser messages and uploaded file data are encrypted with AES-GCM before leaving the client when users share the same chat passphrase.
+- Stored messages and uploaded file data are also encrypted with Fernet before being saved.
 - WebSocket login attempts are rate-limited by IP.
 - Chat messages are rate-limited per user.
 - DM channel names are normalized so both users share the same private channel.
@@ -87,7 +88,7 @@ Use `wss://` for hosted HTTPS sites. Browsers usually block insecure `ws://` con
 - Account creation and login enforce username format and minimum password length.
 - WebSocket payloads are validated server-side for allowed actions, channels, message length, file names, and file data size before storage or broadcast.
 
-Note: current encryption is server-side encryption at rest. The server can decrypt messages in order to return readable chat history. True end-to-end encryption would require client-side encryption before messages leave the browser.
+Note: users must enter the same chat encryption passphrase to decrypt each other's hosted browser messages/files. The Python server stores and relays encrypted client-side envelopes, then applies Fernet encryption at rest as a second layer.
 
 ## Reliability and Presence
 - The hosted client sends heartbeat pings to keep WebSocket connections active.

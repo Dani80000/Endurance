@@ -2,6 +2,7 @@ const state = {
     socket: null,
     username: "",
     password: "",
+    encryptionKey: null,
     loggedIn: false,
     intentionallyClosed: false,
     reconnectAttempts: 0,
@@ -17,6 +18,7 @@ const state = {
 const els = {
     username: document.getElementById("username"),
     password: document.getElementById("password"),
+    chatPassphrase: document.getElementById("chat-passphrase"),
     status: document.getElementById("status-text"),
     login: document.getElementById("login-button"),
     create: document.getElementById("create-button"),
@@ -66,6 +68,60 @@ const blockedMimeTypes = new Set([
 ]);
 const eicarSignature = "X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*";
 
+function bytesToBase64(bytes) {
+    let binary = "";
+    bytes.forEach(byte => {
+        binary += String.fromCharCode(byte);
+    });
+    return btoa(binary);
+}
+
+function base64ToBytes(base64) {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+}
+
+async function deriveEncryptionKey(passphrase) {
+    const encoded = new TextEncoder().encode(passphrase);
+    const keyMaterial = await crypto.subtle.importKey("raw", encoded, "PBKDF2", false, ["deriveKey"]);
+    return crypto.subtle.deriveKey(
+        {
+            name: "PBKDF2",
+            salt: new TextEncoder().encode("SecureChat-v1-shared-chat"),
+            iterations: 210000,
+            hash: "SHA-256",
+        },
+        keyMaterial,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["encrypt", "decrypt"]
+    );
+}
+
+async function encryptForChat(value) {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const plaintext = new TextEncoder().encode(JSON.stringify(value));
+    const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, state.encryptionKey, plaintext);
+    return {
+        type: "e2ee",
+        version: 1,
+        alg: "AES-GCM",
+        iv: bytesToBase64(iv),
+        data: bytesToBase64(new Uint8Array(ciphertext)),
+    };
+}
+
+async function decryptFromChat(envelope) {
+    const iv = base64ToBytes(envelope.iv);
+    const ciphertext = base64ToBytes(envelope.data);
+    const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, state.encryptionKey, ciphertext);
+    return JSON.parse(new TextDecoder().decode(plaintext));
+}
+
 function getWebSocketUrl() {
     if (window.SECURECHAT_WS_URL) {
         return window.SECURECHAT_WS_URL;
@@ -111,6 +167,10 @@ function formatMessage(text) {
 }
 
 function formatPayload(content) {
+    if (typeof content === "object" && content !== null && content.type === "e2ee") {
+        return "[Encrypted message - enter the correct chat passphrase to decrypt]";
+    }
+
     if (typeof content === "object" && content !== null && content.type === "file") {
         if (content.download_error) {
             return escapeHtml(content.download_error);
@@ -142,6 +202,29 @@ function renderMessage(message) {
     return div;
 }
 
+async function decryptMessageForDisplay(message) {
+    if (!message || typeof message !== "object") return message;
+    if (!message.message || typeof message.message !== "object" || message.message.type !== "e2ee") {
+        return message;
+    }
+
+    try {
+        return {
+            ...message,
+            message: await decryptFromChat(message.message),
+        };
+    } catch {
+        return {
+            ...message,
+            message: "[Unable to decrypt message. Check the shared chat passphrase.]",
+        };
+    }
+}
+
+async function decryptMessagesForDisplay(messages) {
+    return Promise.all((messages || []).map(decryptMessageForDisplay));
+}
+
 function refreshChat() {
     const messages = state.chatData[state.currentChannel] || [];
     els.history.innerHTML = "";
@@ -165,7 +248,8 @@ function refreshPresence() {
     });
 }
 
-function pushMessage(message) {
+async function pushMessage(message) {
+    message = await decryptMessageForDisplay(message);
     const channel = message.channel || "General";
     if (!state.chatData[channel]) state.chatData[channel] = [];
     state.chatData[channel].push(message);
@@ -193,6 +277,7 @@ function requestHistory(channel) {
 function connect(action, isReconnect = false) {
     const username = els.username.value.trim().toLowerCase();
     const password = els.password.value;
+    const chatPassphrase = els.chatPassphrase.value;
     const url = getWebSocketUrl();
 
     if (!usernamePattern.test(username)) {
@@ -205,14 +290,29 @@ function connect(action, isReconnect = false) {
         return;
     }
 
+    if (chatPassphrase.length < 8) {
+        setStatus("Chat encryption passphrase must be at least 8 characters.", true);
+        return;
+    }
+
     if (action === "login") {
         state.password = password;
     }
 
-    setStatus(isReconnect ? "Reconnecting..." : "Connecting...");
+    setStatus(isReconnect ? "Reconnecting..." : "Preparing encryption...");
     state.username = username;
     state.intentionallyClosed = false;
 
+    deriveEncryptionKey(chatPassphrase).then(key => {
+        state.encryptionKey = key;
+        openAuthenticatedSocket(action, url, username, password, isReconnect);
+    }).catch(() => {
+        setStatus("Could not prepare chat encryption.", true);
+    });
+}
+
+function openAuthenticatedSocket(action, url, username, password, isReconnect = false) {
+    setStatus(isReconnect ? "Reconnecting..." : "Connecting...");
     const socket = new WebSocket(url);
     state.socket = socket;
     const connectTimeoutId = window.setTimeout(() => {
@@ -234,7 +334,7 @@ function connect(action, isReconnect = false) {
         socket.send(JSON.stringify({ action, user_id: username, password, channel: "General" }));
     });
 
-    socket.addEventListener("message", event => {
+    socket.addEventListener("message", async event => {
         window.clearTimeout(authTimeoutId);
         const data = JSON.parse(event.data);
 
@@ -248,7 +348,7 @@ function connect(action, isReconnect = false) {
             setStatus(data.message || "Connected.");
             state.loggedIn = true;
             state.reconnectAttempts = 0;
-            state.chatData.General = data.history || [];
+            state.chatData.General = await decryptMessagesForDisplay(data.history || []);
             switchToChat();
             return;
         }
@@ -279,7 +379,7 @@ function connect(action, isReconnect = false) {
         }
 
         if (data.action === "history_update") {
-            state.chatData[data.channel || "General"] = data.history || [];
+            state.chatData[data.channel || "General"] = await decryptMessagesForDisplay(data.history || []);
             refreshChat();
             return;
         }
@@ -288,7 +388,7 @@ function connect(action, isReconnect = false) {
             return;
         }
 
-        pushMessage(data);
+        await pushMessage(data);
     });
 
     socket.addEventListener("close", () => {
@@ -334,14 +434,15 @@ function scheduleReconnect() {
     }, delay);
 }
 
-function sendMessage() {
+async function sendMessage() {
     const text = els.message.value;
     if (!text.trim() || state.socket?.readyState !== WebSocket.OPEN) return;
 
+    const encryptedMessage = await encryptForChat(text);
     state.socket.send(JSON.stringify({
         action: "send_message",
         user_id: state.username,
-        message: text,
+        message: encryptedMessage,
         channel: state.currentChannel,
     }));
     pushMessage({ sender: state.username, message: text, channel: state.currentChannel });
@@ -445,17 +546,18 @@ async function sendFile() {
     }
 
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
         const payload = {
             type: "file",
             filename: file.name,
             data: reader.result,
         };
+        const encryptedPayload = await encryptForChat(payload);
 
         state.socket.send(JSON.stringify({
             action: "send_message",
             user_id: state.username,
-            message: payload,
+            message: encryptedPayload,
             channel: state.currentChannel,
         }));
         pushMessage({ sender: state.username, message: payload, channel: state.currentChannel });

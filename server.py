@@ -22,6 +22,7 @@ MIN_PASSWORD_LENGTH = 8
 MAX_USERNAME_LENGTH = 24
 MAX_MESSAGE_LENGTH = 4000
 MAX_FILE_DATA_LENGTH = 7_000_000
+MAX_E2EE_DATA_LENGTH = 7_000_000
 MAX_FILENAME_LENGTH = 120
 login_attempts = defaultdict(list)
 USERNAME_RE = re.compile(r"^[a-z0-9_]{3,24}$")
@@ -130,6 +131,20 @@ def validate_message_payload(payload: dict, current_user: str) -> str | None:
             return "Invalid file data."
         if len(data) > MAX_FILE_DATA_LENGTH:
             return "File data is too large."
+        return None
+
+    if isinstance(message, dict) and message.get("type") == "e2ee":
+        if message.get("version") != 1 or message.get("alg") != "AES-GCM":
+            return "Invalid encrypted message format."
+
+        iv = message.get("iv", "")
+        data = message.get("data", "")
+        if not isinstance(iv, str) or not iv.strip():
+            return "Invalid encrypted message IV."
+        if not isinstance(data, str) or not data.strip():
+            return "Invalid encrypted message data."
+        if len(data) > MAX_E2EE_DATA_LENGTH:
+            return "Encrypted message data is too large."
         return None
 
     return "Invalid message."

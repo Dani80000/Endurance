@@ -38,6 +38,10 @@ def save_message_to_json(payload):
             payload_to_store["message"]["data"] = encrypt_message(file_data)
             payload_to_store["message"]["encrypted_data"] = True
             payload_to_store["encrypted"] = True
+    elif isinstance(message, dict) and message.get("type") == "e2ee":
+        payload_to_store["message"] = encrypt_message(json.dumps(message))
+        payload_to_store["encrypted"] = True
+        payload_to_store["e2ee"] = True
 
     history.append(payload_to_store)
 
@@ -59,7 +63,12 @@ def join_channel(user_id, channel):
 
                 if msg_copy.get("encrypted") is True:
                     stored_message = msg_copy.get("message", "")
-                    if isinstance(stored_message, str) and stored_message.strip():
+                    if msg_copy.get("e2ee") is True and isinstance(stored_message, str) and stored_message.strip():
+                        try:
+                            msg_copy["message"] = json.loads(decrypt_message(stored_message))
+                        except Exception:
+                            msg_copy["message"] = "[Unable to decrypt stored encrypted envelope]"
+                    elif isinstance(stored_message, str) and stored_message.strip():
                         try:
                             msg_copy["message"] = decrypt_message(stored_message)
                         except Exception:
