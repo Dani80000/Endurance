@@ -202,8 +202,6 @@ async def broadcast_to_channel(payload, channel, current_user=None):
                 continue
             if room_prefix and not active_channels.get(conn, "").lower().startswith(room_prefix):
                 continue
-            if not room_prefix and active_channels.get(conn, "").lower().startswith("room_"):
-                continue
             await conn.send_json(payload)
 
 

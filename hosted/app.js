@@ -194,7 +194,7 @@ function formatPayload(content) {
 }
 
 function normalizeDmChannel(user1, user2) {
-    return `${state.roomId}_dm_${[user1.trim().toLowerCase(), user2.trim().toLowerCase()].sort().join("_")}`;
+    return `dm_${[user1.trim().toLowerCase(), user2.trim().toLowerCase()].sort().join("_")}`;
 }
 
 function renderMessage(message) {
