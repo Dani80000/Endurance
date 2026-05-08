@@ -47,6 +47,23 @@ const emojiList = [
     "📎", "🔒", "🔑", "🛡️", "📣", "🧠", "🐛"
 ];
 
+const maxUploadBytes = 5 * 1024 * 1024;
+const blockedFileExtensions = new Set([
+    "ade", "adp", "apk", "app", "appx", "bat", "bin", "cmd", "com", "cpl",
+    "dll", "dmg", "exe", "gadget", "hta", "ins", "iso", "jar", "js", "jse",
+    "lnk", "msc", "msi", "msp", "mst", "ps1", "psm1", "reg", "scr", "sh",
+    "sys", "vb", "vbe", "vbs", "ws", "wsc", "wsf", "wsh"
+]);
+const blockedMimeTypes = new Set([
+    "application/x-msdownload",
+    "application/x-msdos-program",
+    "application/x-ms-installer",
+    "application/x-sh",
+    "application/java-archive",
+    "text/javascript"
+]);
+const eicarSignature = "X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*";
+
 function getWebSocketUrl() {
     if (window.SECURECHAT_WS_URL) {
         return window.SECURECHAT_WS_URL;
@@ -58,6 +75,15 @@ function getWebSocketUrl() {
 function setStatus(message, isError = false) {
     els.status.textContent = message;
     els.status.classList.toggle("error", isError);
+}
+
+function showLocalSystemMessage(message) {
+    if (state.loggedIn) {
+        pushMessage({ sender: "SYSTEM", message, channel: state.currentChannel });
+        return;
+    }
+
+    setStatus(message, true);
 }
 
 function capitalizeName(name) {
@@ -354,9 +380,62 @@ function toggleEmojiPicker(event) {
     els.emojiPicker.hidden = !els.emojiPicker.hidden;
 }
 
-function sendFile() {
+function getFileExtension(filename) {
+    const parts = filename.toLowerCase().split(".");
+    return parts.length > 1 ? parts.pop() : "";
+}
+
+function hasSuspiciousDoubleExtension(filename) {
+    const parts = filename.toLowerCase().split(".").filter(Boolean);
+    if (parts.length < 3) return false;
+    return blockedFileExtensions.has(parts[parts.length - 1]) || blockedFileExtensions.has(parts[parts.length - 2]);
+}
+
+async function validateFileBeforeSend(file) {
+    const extension = getFileExtension(file.name);
+
+    if (file.size <= 0) {
+        return "File is empty.";
+    }
+
+    if (file.size > maxUploadBytes) {
+        return "File is too large. Maximum allowed size is 5 MB.";
+    }
+
+    if (blockedFileExtensions.has(extension)) {
+        return `Blocked potentially dangerous file type: .${extension}`;
+    }
+
+    if (hasSuspiciousDoubleExtension(file.name)) {
+        return "Blocked suspicious double-extension filename.";
+    }
+
+    if (file.type && blockedMimeTypes.has(file.type.toLowerCase())) {
+        return `Blocked potentially dangerous MIME type: ${file.type}`;
+    }
+
+    const sample = await file.slice(0, Math.min(file.size, 65536)).text();
+    if (sample.includes(eicarSignature)) {
+        return "Blocked EICAR antivirus test signature.";
+    }
+
+    if (/<script[\s>]/i.test(sample) && ["html", "htm", "svg", "xml"].includes(extension)) {
+        return "Blocked active script content in uploaded markup.";
+    }
+
+    return "";
+}
+
+async function sendFile() {
     const file = els.fileInput.files[0];
     if (!file || state.socket?.readyState !== WebSocket.OPEN) return;
+
+    const validationError = await validateFileBeforeSend(file);
+    if (validationError) {
+        showLocalSystemMessage(`Upload blocked: ${validationError}`);
+        els.fileInput.value = "";
+        return;
+    }
 
     const reader = new FileReader();
     reader.onload = () => {

@@ -92,6 +92,7 @@ Note: current encryption is server-side encryption at rest. The server can decry
 - The server replies with pong messages and broadcasts online user presence.
 - The hosted client displays online users and typing indicators.
 - The hosted client attempts automatic reconnects after unexpected disconnects.
+- The hosted client performs basic file-upload validation before transmission, including size limits, blocked executable/script extensions, suspicious double-extension checks, and EICAR test-string detection.
 
 ## Deliverables
 A video presentation showing the following:
