@@ -3,6 +3,7 @@ const state = {
     username: "",
     password: "",
     encryptionKey: null,
+    roomId: "General",
     loggedIn: false,
     intentionallyClosed: false,
     reconnectAttempts: 0,
@@ -50,7 +51,7 @@ const emojiList = [
 ];
 
 const maxUploadBytes = 5 * 1024 * 1024;
-const usernamePattern = /^[a-z0-9_]{3,24}$/;
+const usernamePattern = /^[a-z0-9_]{2,24}$/;
 const minPasswordLength = 8;
 const blockedFileExtensions = new Set([
     "ade", "adp", "apk", "app", "appx", "bat", "bin", "cmd", "com", "cpl",
@@ -100,6 +101,13 @@ async function deriveEncryptionKey(passphrase) {
         false,
         ["encrypt", "decrypt"]
     );
+}
+
+async function deriveRoomId(passphrase) {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`SecureChat-room:${passphrase}`));
+    return Array.from(new Uint8Array(digest.slice(0, 8)))
+        .map(byte => byte.toString(16).padStart(2, "0"))
+        .join("");
 }
 
 async function encryptForChat(value) {
@@ -185,7 +193,7 @@ function formatPayload(content) {
 }
 
 function normalizeDmChannel(user1, user2) {
-    return `dm_${[user1.trim().toLowerCase(), user2.trim().toLowerCase()].sort().join("_")}`;
+    return `${state.roomId}_dm_${[user1.trim().toLowerCase(), user2.trim().toLowerCase()].sort().join("_")}`;
 }
 
 function renderMessage(message) {
@@ -261,8 +269,8 @@ function switchToChat() {
     els.loginSection.style.display = "none";
     els.chatSection.hidden = false;
     els.chatSection.style.display = "grid";
-    state.currentChannel = "General";
-    els.chatTitle.textContent = "Server";
+    state.currentChannel = state.roomId;
+    els.chatTitle.textContent = "Encrypted Room";
     refreshPresence();
     refreshChat();
     startHeartbeat();
@@ -281,7 +289,7 @@ function connect(action, isReconnect = false) {
     const url = getWebSocketUrl();
 
     if (!usernamePattern.test(username)) {
-        setStatus("Username must be 3-24 characters and use only lowercase letters, numbers, and underscores.", true);
+        setStatus("Username must be 2-24 characters and use only lowercase letters, numbers, and underscores.", true);
         return;
     }
 
@@ -303,8 +311,9 @@ function connect(action, isReconnect = false) {
     state.username = username;
     state.intentionallyClosed = false;
 
-    deriveEncryptionKey(chatPassphrase).then(key => {
+    Promise.all([deriveEncryptionKey(chatPassphrase), deriveRoomId(chatPassphrase)]).then(([key, roomHash]) => {
         state.encryptionKey = key;
+        state.roomId = `room_${roomHash}`;
         openAuthenticatedSocket(action, url, username, password, isReconnect);
     }).catch(() => {
         setStatus("Could not prepare chat encryption.", true);
@@ -331,7 +340,7 @@ function openAuthenticatedSocket(action, url, username, password, isReconnect = 
     socket.addEventListener("open", () => {
         window.clearTimeout(connectTimeoutId);
         setStatus("Authenticating...");
-        socket.send(JSON.stringify({ action, user_id: username, password, channel: "General" }));
+        socket.send(JSON.stringify({ action, user_id: username, password, channel: state.roomId }));
     });
 
     socket.addEventListener("message", async event => {
@@ -348,8 +357,9 @@ function openAuthenticatedSocket(action, url, username, password, isReconnect = 
             setStatus(data.message || "Connected.");
             state.loggedIn = true;
             state.reconnectAttempts = 0;
-            state.chatData.General = await decryptMessagesForDisplay(data.history || []);
+            state.chatData[state.roomId] = await decryptMessagesForDisplay(data.history || []);
             switchToChat();
+            requestHistory(state.roomId);
             return;
         }
 
@@ -567,9 +577,9 @@ async function sendFile() {
 }
 
 function switchToServer() {
-    state.currentChannel = "General";
-    els.chatTitle.textContent = "Server";
-    requestHistory("General");
+    state.currentChannel = state.roomId;
+    els.chatTitle.textContent = "Encrypted Room";
+    requestHistory(state.roomId);
     refreshChat();
 }
 

@@ -19,14 +19,15 @@ RATE_LIMIT_SECONDS = 1
 MAX_ATTEMPTS = 5
 LOCKOUT_TIME = 900 #in seconds
 MIN_PASSWORD_LENGTH = 8
+MIN_USERNAME_LENGTH = 2
 MAX_USERNAME_LENGTH = 24
 MAX_MESSAGE_LENGTH = 4000
 MAX_FILE_DATA_LENGTH = 7_000_000
 MAX_E2EE_DATA_LENGTH = 7_000_000
 MAX_FILENAME_LENGTH = 120
 login_attempts = defaultdict(list)
-USERNAME_RE = re.compile(r"^[a-z0-9_]{3,24}$")
-SAFE_CHANNEL_RE = re.compile(r"^(General|dm_[a-z0-9_]{3,24}_[a-z0-9_]{3,24})$")
+USERNAME_RE = re.compile(r"^[a-z0-9_]{2,24}$")
+SAFE_CHANNEL_RE = re.compile(r"^(General|room_[a-f0-9]{16}|room_[a-f0-9]{16}_dm_[a-z0-9_]{2,24}_[a-z0-9_]{2,24}|dm_[a-z0-9_]{2,24}_[a-z0-9_]{2,24})$")
 ALLOWED_ACTIONS = {"send_message", "get_history", "typing", "ping"}
 BLOCKED_FILE_EXTENSIONS = {
     "ade", "adp", "apk", "app", "appx", "bat", "bin", "cmd", "com", "cpl",
@@ -49,7 +50,7 @@ def validate_username(user_id: str) -> str | None:
         return "Username is required."
 
     if not USERNAME_RE.fullmatch(user_id):
-        return "Username must be 3-24 characters and use only lowercase letters, numbers, and underscores."
+        return "Username must be 2-24 characters and use only lowercase letters, numbers, and underscores."
 
     return None
 
@@ -86,6 +87,15 @@ def validate_channel(channel: str) -> str | None:
     return None
 
 
+def dm_allowed_users(channel: str) -> list[str]:
+    channel = channel.lower()
+    if "_dm_" in channel:
+        return channel.split("_dm_", 1)[1].split("_")
+    if channel.startswith("dm_"):
+        return channel.split("_")[1:]
+    return []
+
+
 def validate_message_payload(payload: dict, current_user: str) -> str | None:
     if not isinstance(payload, dict):
         return "Invalid payload."
@@ -99,8 +109,8 @@ def validate_message_payload(payload: dict, current_user: str) -> str | None:
     if channel_error:
         return channel_error
 
-    if channel.lower().startswith("dm_"):
-        allowed_users = channel.lower().split("_")[1:]
+    if channel.lower().startswith("dm_") or "_dm_" in channel.lower():
+        allowed_users = dm_allowed_users(channel)
         if current_user not in allowed_users:
             return "You are not part of this DM."
 
@@ -174,8 +184,8 @@ async def broadcast_to_channel(payload, channel, current_user=None):
             await conn.send_json(payload)
         return
 
-    if channel.lower().startswith("dm_"):
-        allowed_users = channel.lower().split("_")[1:]
+    if channel.lower().startswith("dm_") or "_dm_" in channel.lower():
+        allowed_users = dm_allowed_users(channel)
         if current_user and current_user not in allowed_users:
             return
 
@@ -277,12 +287,10 @@ async def handle_chat_websocket(websocket: WebSocket):
             active_connections[websocket] = user_id
             current_user = user_id
             
-            history = connections.join_channel(user_id, "General")
-            
             await websocket.send_json({
                 "status": "success", 
                 "message": "Connected securely.",
-                "history": history
+                "history": []
             })
             
             for conn in list(active_connections.keys()):
@@ -349,7 +357,7 @@ async def handle_chat_websocket(websocket: WebSocket):
                     if channel == "General":
                         await broadcast_to_channel(payload, channel)
                     
-                    elif channel.lower().startswith("dm_"):
+                    elif channel.lower().startswith("dm_") or "_dm_" in channel.lower():
                         await broadcast_to_channel(payload, channel, current_user)
                             
             except WebSocketDisconnect:

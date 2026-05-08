@@ -88,7 +88,7 @@ Use `wss://` for hosted HTTPS sites. Browsers usually block insecure `ws://` con
 - Account creation and login enforce username format and minimum password length.
 - WebSocket payloads are validated server-side for allowed actions, channels, message length, file names, and file data size before storage or broadcast.
 
-Note: users must enter the same chat encryption passphrase to decrypt each other's hosted browser messages/files. The Python server stores and relays encrypted client-side envelopes, then applies Fernet encryption at rest as a second layer.
+Note: users must enter the same chat encryption passphrase to join the same encrypted room and decrypt each other's hosted browser messages/files. The browser derives a room ID from the passphrase without sending the passphrase itself. The Python server stores and relays encrypted client-side envelopes, then applies Fernet encryption at rest as a second layer.
 
 ## Reliability and Presence
 - The hosted client sends heartbeat pings to keep WebSocket connections active.
