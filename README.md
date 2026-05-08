@@ -84,6 +84,8 @@ Use `wss://` for hosted HTTPS sites. Browsers usually block insecure `ws://` con
 - Chat messages are rate-limited per user.
 - DM channel names are normalized so both users share the same private channel.
 - Stored channel filenames are sanitized before writing message history.
+- Account creation and login enforce username format and minimum password length.
+- WebSocket payloads are validated server-side for allowed actions, channels, message length, file names, and file data size before storage or broadcast.
 
 Note: current encryption is server-side encryption at rest. The server can decrypt messages in order to return readable chat history. True end-to-end encryption would require client-side encryption before messages leave the browser.
 

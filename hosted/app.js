@@ -48,6 +48,8 @@ const emojiList = [
 ];
 
 const maxUploadBytes = 5 * 1024 * 1024;
+const usernamePattern = /^[a-z0-9_]{3,24}$/;
+const minPasswordLength = 8;
 const blockedFileExtensions = new Set([
     "ade", "adp", "apk", "app", "appx", "bat", "bin", "cmd", "com", "cpl",
     "dll", "dmg", "exe", "gadget", "hta", "ins", "iso", "jar", "js", "jse",
@@ -193,8 +195,13 @@ function connect(action, isReconnect = false) {
     const password = els.password.value;
     const url = getWebSocketUrl();
 
-    if (!username || !password) {
-        setStatus("Enter a username and password.", true);
+    if (!usernamePattern.test(username)) {
+        setStatus("Username must be 3-24 characters and use only lowercase letters, numbers, and underscores.", true);
+        return;
+    }
+
+    if (password.length < minPasswordLength) {
+        setStatus(`Password must be at least ${minPasswordLength} characters.`, true);
         return;
     }
 

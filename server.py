@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import re
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from collections import defaultdict
 import uvicorn
@@ -17,7 +18,21 @@ last_message_times = {}
 RATE_LIMIT_SECONDS = 1
 MAX_ATTEMPTS = 5
 LOCKOUT_TIME = 900 #in seconds
+MIN_PASSWORD_LENGTH = 8
+MAX_USERNAME_LENGTH = 24
+MAX_MESSAGE_LENGTH = 4000
+MAX_FILE_DATA_LENGTH = 7_000_000
+MAX_FILENAME_LENGTH = 120
 login_attempts = defaultdict(list)
+USERNAME_RE = re.compile(r"^[a-z0-9_]{3,24}$")
+SAFE_CHANNEL_RE = re.compile(r"^(General|dm_[a-z0-9_]{3,24}_[a-z0-9_]{3,24})$")
+ALLOWED_ACTIONS = {"send_message", "get_history", "typing", "ping"}
+BLOCKED_FILE_EXTENSIONS = {
+    "ade", "adp", "apk", "app", "appx", "bat", "bin", "cmd", "com", "cpl",
+    "dll", "dmg", "exe", "gadget", "hta", "ins", "iso", "jar", "js", "jse",
+    "lnk", "msc", "msi", "msp", "mst", "ps1", "psm1", "reg", "scr", "sh",
+    "sys", "vb", "vbe", "vbs", "ws", "wsc", "wsf", "wsh"
+}
 
 def is_locked_out(ip: str) -> bool:
     now = time.time()
@@ -26,6 +41,106 @@ def is_locked_out(ip: str) -> bool:
 
 def record_failed_attempt(ip: str):
     login_attempts[ip].append(time.time())
+
+
+def validate_username(user_id: str) -> str | None:
+    if not isinstance(user_id, str) or not user_id.strip():
+        return "Username is required."
+
+    if not USERNAME_RE.fullmatch(user_id):
+        return "Username must be 3-24 characters and use only lowercase letters, numbers, and underscores."
+
+    return None
+
+
+def validate_password(password: str) -> str | None:
+    if not isinstance(password, str) or not password:
+        return "Password is required."
+
+    if len(password) < MIN_PASSWORD_LENGTH:
+        return f"Password must be at least {MIN_PASSWORD_LENGTH} characters."
+
+    return None
+
+
+def get_file_extension(filename: str) -> str:
+    parts = filename.lower().split(".")
+    return parts[-1] if len(parts) > 1 else ""
+
+
+def has_suspicious_double_extension(filename: str) -> bool:
+    parts = [part for part in filename.lower().split(".") if part]
+    if len(parts) < 3:
+        return False
+    return parts[-1] in BLOCKED_FILE_EXTENSIONS or parts[-2] in BLOCKED_FILE_EXTENSIONS
+
+
+def validate_channel(channel: str) -> str | None:
+    if not isinstance(channel, str) or len(channel) > 80:
+        return "Invalid channel."
+
+    if not SAFE_CHANNEL_RE.fullmatch(channel):
+        return "Invalid channel name."
+
+    return None
+
+
+def validate_message_payload(payload: dict, current_user: str) -> str | None:
+    if not isinstance(payload, dict):
+        return "Invalid payload."
+
+    action = payload.get("action", "send_message")
+    if action not in ALLOWED_ACTIONS:
+        return "Unsupported action."
+
+    channel = normalize_channel_name(payload.get("channel", "General"))
+    channel_error = validate_channel(channel)
+    if channel_error:
+        return channel_error
+
+    if channel.lower().startswith("dm_"):
+        allowed_users = channel.lower().split("_")[1:]
+        if current_user not in allowed_users:
+            return "You are not part of this DM."
+
+    if action in {"ping", "typing", "get_history"}:
+        return None
+
+    message = payload.get("message")
+    if isinstance(message, str):
+        if not message.strip():
+            return "Message cannot be empty."
+        if len(message) > MAX_MESSAGE_LENGTH:
+            return f"Message is too long. Maximum is {MAX_MESSAGE_LENGTH} characters."
+        return None
+
+    if isinstance(message, dict) and message.get("type") == "file":
+        filename = message.get("filename", "")
+        data = message.get("data", "")
+
+        if not isinstance(filename, str) or not filename.strip():
+            return "File name is required."
+        if len(filename) > MAX_FILENAME_LENGTH:
+            return f"File name is too long. Maximum is {MAX_FILENAME_LENGTH} characters."
+        if get_file_extension(filename) in BLOCKED_FILE_EXTENSIONS:
+            return "Blocked potentially dangerous file type."
+        if has_suspicious_double_extension(filename):
+            return "Blocked suspicious double-extension filename."
+        if not isinstance(data, str) or not data.startswith("data:"):
+            return "Invalid file data."
+        if len(data) > MAX_FILE_DATA_LENGTH:
+            return "File data is too large."
+        return None
+
+    return "Invalid message."
+
+
+async def send_validation_error(websocket: WebSocket, message: str, channel: str = "General"):
+    await websocket.send_json({
+        "sender": "SYSTEM",
+        "message": message,
+        "channel": channel
+    })
 
 
 async def broadcast_presence():
@@ -117,6 +232,16 @@ async def handle_chat_websocket(websocket: WebSocket):
         action = data.get("action", "login")
         user_id = data.get("user_id", "").strip().lower()
         password = data.get("password")
+
+        username_error = validate_username(user_id)
+        if username_error:
+            await websocket.send_json({"status": "error", "message": username_error})
+            return
+
+        password_error = validate_password(password)
+        if password_error:
+            await websocket.send_json({"status": "error", "message": password_error})
+            return
         
         if action == "create":
             print(f"Creating account for: {user_id}")
@@ -156,6 +281,11 @@ async def handle_chat_websocket(websocket: WebSocket):
                     action = payload.get("action", "send_message")
                     channel = normalize_channel_name(payload.get("channel", "General"))
                     payload["channel"] = channel
+
+                    validation_error = validate_message_payload(payload, current_user)
+                    if validation_error:
+                        await send_validation_error(websocket, validation_error, channel)
+                        continue
 
                     if action == "ping":
                         await websocket.send_json({
@@ -205,16 +335,6 @@ async def handle_chat_websocket(websocket: WebSocket):
                         await broadcast_to_channel(payload, channel)
                     
                     elif channel.lower().startswith("dm_"):
-                        allowed_users = channel.lower().split("_")[1:]
-
-                        if current_user not in allowed_users:
-                            await websocket.send_json({
-                                "sender": "SYSTEM",
-                                "message": "You are not part of this DM.",
-                                "channel": channel
-                            })
-                            continue
-
                         await broadcast_to_channel(payload, channel, current_user)
                             
             except WebSocketDisconnect:
