@@ -14,6 +14,7 @@ if not os.path.exists("messages"):
     os.makedirs("messages")
 
 active_connections = {}
+active_channels = {}
 last_message_times = {}
 RATE_LIMIT_SECONDS = 1
 MAX_ATTEMPTS = 5
@@ -184,14 +185,26 @@ async def broadcast_to_channel(payload, channel, current_user=None):
             await conn.send_json(payload)
         return
 
+    if channel.lower().startswith("room_") and "_dm_" not in channel.lower():
+        for conn in list(active_connections.keys()):
+            if active_channels.get(conn) == channel:
+                await conn.send_json(payload)
+        return
+
     if channel.lower().startswith("dm_") or "_dm_" in channel.lower():
         allowed_users = dm_allowed_users(channel)
+        room_prefix = channel.lower().split("_dm_", 1)[0] if "_dm_" in channel.lower() else ""
         if current_user and current_user not in allowed_users:
             return
 
         for conn, c_user_id in list(active_connections.items()):
-            if c_user_id in allowed_users:
-                await conn.send_json(payload)
+            if c_user_id not in allowed_users:
+                continue
+            if room_prefix and not active_channels.get(conn, "").lower().startswith(room_prefix):
+                continue
+            if not room_prefix and active_channels.get(conn, "").lower().startswith("room_"):
+                continue
+            await conn.send_json(payload)
 
 
 @app.get("/")
@@ -285,6 +298,7 @@ async def handle_chat_websocket(websocket: WebSocket):
 
             login_attempts[ip] = []
             active_connections[websocket] = user_id
+            active_channels[websocket] = normalize_channel_name(data.get("channel", "General"))
             current_user = user_id
             
             await websocket.send_json({
@@ -318,6 +332,7 @@ async def handle_chat_websocket(websocket: WebSocket):
                         continue
 
                     if action == "typing":
+                        active_channels[websocket] = channel
                         await broadcast_to_channel({
                             "action": "typing",
                             "sender": current_user,
@@ -326,6 +341,7 @@ async def handle_chat_websocket(websocket: WebSocket):
                         continue
 
                     if action == "get_history":
+                        active_channels[websocket] = channel
                         history = connections.join_channel(current_user, channel)
                         await websocket.send_json({
                             "action": "history_update",
@@ -348,6 +364,7 @@ async def handle_chat_websocket(websocket: WebSocket):
                     last_message_times[user_id] = current_time
 
                     payload["sender"] = user_id
+                    active_channels[websocket] = channel
                     
                     try:
                         connections.save_message_to_json(payload)
@@ -357,12 +374,16 @@ async def handle_chat_websocket(websocket: WebSocket):
                     if channel == "General":
                         await broadcast_to_channel(payload, channel)
                     
+                    elif channel.lower().startswith("room_") and "_dm_" not in channel.lower():
+                        await broadcast_to_channel(payload, channel, current_user)
+
                     elif channel.lower().startswith("dm_") or "_dm_" in channel.lower():
                         await broadcast_to_channel(payload, channel, current_user)
                             
             except WebSocketDisconnect:
                 print(f"{user_id} disconnected")
                 if websocket in active_connections: del active_connections[websocket]
+                if websocket in active_channels: del active_channels[websocket]
                 if user_id in last_message_times:
                     del last_message_times[user_id]
                 for conn in list(active_connections.keys()):
@@ -384,6 +405,8 @@ async def handle_chat_websocket(websocket: WebSocket):
     finally:
         if websocket in active_connections:
             del active_connections[websocket]
+            if websocket in active_channels:
+                del active_channels[websocket]
             await broadcast_presence()
 
 if __name__ == "__main__":
