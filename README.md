@@ -1,17 +1,61 @@
 # Secure-Chat
 
-Secure-Chat is a Python/FastAPI WebSocket chat app with authentication, encrypted message storage, browser-side room encryption, direct messages, channels, presence, and file sharing.
+Secure-Chat is a Python/FastAPI WebSocket chat app with account login, direct messages, encrypted passphrase-based rooms, online presence, typing indicators, rich text, emoji support, and encrypted file sharing.
 
 Authors: Dani Dimovski, Robby Loeffler, Adam Secrest
 
+## Production URLs
+
+Current production deployment:
+
+| Purpose | URL |
+| --- | --- |
+| Frontend app | `https://www.securechat455.dev` |
+| Backend API/WebSocket host | `https://chat.securechat455.dev` |
+| Health check | `https://chat.securechat455.dev/health` |
+| WebSocket endpoint | `wss://chat.securechat455.dev/ws` |
+
+Users should visit the frontend app URL. Monitoring tools should use the health check URL.
+
 ## Architecture
 
-The project has two deployable pieces:
+Secure-Chat is split into two deployable pieces:
 
-1. Python backend: [server.py](server.py)
-2. Static browser client: [hosted/](hosted/)
+1. Static frontend in [hosted/](hosted/)
+2. Python backend in [server.py](server.py)
 
-The backend can run on a home server behind Cloudflare Tunnel or a reverse proxy. The frontend can be served from the same domain as the backend or from a separate static host.
+Production hosting:
+
+1. Cloudflare Pages serves the static frontend at `www.securechat455.dev`.
+2. Jerome, the Windows home server, runs the FastAPI backend locally on `127.0.0.1:10000`.
+3. A named Cloudflare Tunnel publishes Jerome's backend as `chat.securechat455.dev`.
+4. The frontend connects to the backend using `wss://chat.securechat455.dev/ws`.
+
+This keeps the public frontend fast and reliable while keeping Jerome's backend hidden behind Cloudflare Tunnel instead of direct port forwarding.
+
+## Repository Layout
+
+```text
+hosted/                 Static browser frontend
+server.py               FastAPI app and WebSocket server
+accounts.py             Account storage and password verification
+connections.py          Message history storage and decrypt/rehydrate logic
+server_crypto.py        Fernet encryption helpers
+config.py               Environment-based runtime settings
+storage_utils.py        Atomic JSON read/write helpers
+requirements-backend.txt
+.env.example
+```
+
+Runtime data is intentionally not committed:
+
+```text
+.env
+accounts.json
+messages/
+uploads/
+__pycache__/
+```
 
 ## Local Development
 
@@ -21,7 +65,7 @@ Install backend dependencies:
 python -m pip install -r requirements-backend.txt
 ```
 
-Create a local `.env` from the template:
+Create a local `.env` file:
 
 ```powershell
 Copy-Item .env.example .env
@@ -33,15 +77,18 @@ Generate a Fernet key:
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-Edit `.env` and set:
+Edit `.env`:
 
 ```text
-FERNET_KEY=paste_generated_fernet_key_here
-SECRET_KEY=replace_with_a_long_random_secret
+ENVIRONMENT=development
 HOST=127.0.0.1
 PORT=10000
-ENVIRONMENT=development
+LOG_LEVEL=INFO
+SECRET_KEY=replace_with_a_long_random_secret
+FERNET_KEY=paste_generated_fernet_key_here
 ALLOWED_ORIGINS=*
+UPLOAD_DIR=uploads
+MAX_UPLOAD_SIZE=5242880
 ```
 
 Run the backend:
@@ -50,107 +97,128 @@ Run the backend:
 python -m uvicorn server:app --host 127.0.0.1 --port 10000
 ```
 
-Open [hosted/index.html](hosted/index.html) in two browser windows to test two clients.
-
-## Production Startup
-
-For a home server behind Cloudflare Tunnel or a reverse proxy, bind the app locally:
-
-```powershell
-python -m uvicorn server:app --host 127.0.0.1 --port 10000 --proxy-headers --forwarded-allow-ips="*"
-```
-
-Use `127.0.0.1` when Cloudflare Tunnel or your reverse proxy runs on the same machine. This avoids exposing the app directly to your LAN or the public internet.
-
-If another machine on your LAN must proxy to it, use your server's LAN IP or `0.0.0.0`, then firewall it carefully.
-
-## Environment Variables
-
-| Variable | Purpose |
-| --- | --- |
-| `ENVIRONMENT` | `development` or `production`. |
-| `HOST` | Bind address used by `python server.py`. |
-| `PORT` | Backend port, usually `10000`. |
-| `LOG_LEVEL` | Python logging level, for example `INFO` or `WARNING`. |
-| `SECRET_KEY` | Reserved app secret for production features. Use a long random value. |
-| `FERNET_KEY` | Required Fernet key for server-side encrypted storage. |
-| `ALLOWED_ORIGINS` | Comma-separated browser origins allowed to use the backend. |
-| `UPLOAD_DIR` | Reserved upload directory setting. Files are currently stored as encrypted JSON payloads. |
-| `MAX_UPLOAD_SIZE` | Maximum WebSocket file/encrypted payload size. |
-
-Older deployments that still use `MESSAGE_ENCRYPTION_KEY` are supported, but new installs should use `FERNET_KEY`.
+Open [hosted/index.html](hosted/index.html) in two browser windows to test two clients locally.
 
 ## Frontend Configuration
 
-If the frontend is served from the same public domain as the backend, leave [hosted/config.js](hosted/config.js) blank:
+The production frontend config is [hosted/config.js](hosted/config.js):
 
 ```javascript
-window.SECURECHAT_WS_URL = "";
+window.SECURECHAT_WS_URL = "wss://chat.securechat455.dev/ws";
 ```
 
-The browser will automatically use:
+If running everything on one domain in the future, this can be left blank and the browser will auto-detect `/ws` on the current host.
+
+## Backend Startup
+
+Manual backend startup on Jerome:
+
+```powershell
+cd C:\Users\Admin\Endurance
+python -m uvicorn server:app --host 127.0.0.1 --port 10000 --proxy-headers --forwarded-allow-ips="*"
+```
+
+The backend should bind to `127.0.0.1` when Cloudflare Tunnel runs on the same machine. This prevents direct LAN/public exposure.
+
+## Cloudflare Tunnel
+
+Named tunnel:
 
 ```text
-wss://your-domain.example/ws
+securechat
 ```
 
-If the frontend is hosted somewhere else, set:
-
-```javascript
-window.SECURECHAT_WS_URL = "wss://your-backend-domain.example/ws";
-```
-
-## Cloudflare Tunnel Overview
-
-Recommended setup:
-
-1. Run Secure-Chat on the server at `http://127.0.0.1:10000`.
-2. Create a Cloudflare Tunnel public hostname such as `chat.example.com`.
-3. Point the tunnel service to:
+Tunnel hostname:
 
 ```text
-http://127.0.0.1:10000
+chat.securechat455.dev
 ```
 
-Cloudflare handles HTTPS/WSS publicly. Uvicorn receives local HTTP/WebSocket traffic from the tunnel.
+Expected Cloudflare tunnel config on Jerome:
 
-## Windows Continuous Startup
+```yaml
+tunnel: fdfb4472-78e1-4f8d-8e8f-10351eef6301
+credentials-file: C:\Users\Admin\.cloudflared\fdfb4472-78e1-4f8d-8e8f-10351eef6301.json
 
-A simple Windows option is Task Scheduler:
+ingress:
+  - hostname: chat.securechat455.dev
+    service: http://127.0.0.1:10000
+  - service: http_status:404
 
-1. Open Task Scheduler.
-2. Create Task.
-3. Trigger: At startup or At log on.
-4. Action: Start a program.
-5. Program:
+logfile: C:\SecureChatLogs\cloudflared-service.log
+```
+
+Manual tunnel startup:
+
+```powershell
+cd C:\Users\Admin\Downloads
+.\cloudflared-windows-amd64.exe tunnel run securechat
+```
+
+## Windows Scheduled Tasks
+
+Jerome uses Windows scheduled tasks so the backend and tunnel can recover after reboot.
+
+Expected tasks:
 
 ```text
-python
+SecureChat Backend
+SecureChat Permanent Cloudflare Tunnel
 ```
 
-6. Arguments:
+Check task status:
 
-```text
--m uvicorn server:app --host 127.0.0.1 --port 10000 --proxy-headers --forwarded-allow-ips="*"
+```powershell
+schtasks /Query /TN "SecureChat Backend" /V /FO LIST
+schtasks /Query /TN "SecureChat Permanent Cloudflare Tunnel" /V /FO LIST
 ```
 
-7. Start in:
-
-```text
-C:\path\to\Endurance
-```
-
-For a more service-like setup, NSSM also works well with the same command.
-
-## Health Check
-
-Local:
+Check backend health locally:
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:10000/health
 ```
 
-Expected:
+Check public backend health:
+
+```powershell
+Invoke-RestMethod "https://chat.securechat455.dev/health"
+```
+
+Logs are written under:
+
+```text
+C:\SecureChatLogs
+```
+
+## Cloudflare Pages
+
+Cloudflare Pages serves the static frontend from the `hosted/` folder.
+
+Recommended Pages settings:
+
+```text
+Framework preset: None
+Build command: leave blank
+Build output directory: hosted
+Production branch: main
+```
+
+Custom frontend domain:
+
+```text
+www.securechat455.dev
+```
+
+## Monitoring
+
+Use UptimeRobot or a similar service to monitor:
+
+```text
+https://chat.securechat455.dev/health
+```
+
+Expected response:
 
 ```json
 {
@@ -158,71 +226,108 @@ Expected:
 }
 ```
 
-Public tunnel:
+## Environment Variables
 
-```powershell
-Invoke-RestMethod https://chat.example.com/health
-```
+| Variable | Purpose |
+| --- | --- |
+| `ENVIRONMENT` | `development` or `production`. |
+| `HOST` | Bind address used when running `python server.py`. |
+| `PORT` | Backend port, usually `10000`. |
+| `LOG_LEVEL` | Python logging level, for example `INFO` or `WARNING`. |
+| `SECRET_KEY` | Reserved application secret. Use a long random value. |
+| `FERNET_KEY` | Required Fernet key for server-side encrypted storage. |
+| `ALLOWED_ORIGINS` | Comma-separated frontend origins allowed to use the backend. |
+| `UPLOAD_DIR` | Reserved upload directory setting. Files are currently stored as encrypted JSON payloads. |
+| `MAX_UPLOAD_SIZE` | Maximum WebSocket file/encrypted payload size. |
 
-## WebSocket Test
+Older deployments that still use `MESSAGE_ENCRYPTION_KEY` are supported, but new installs should use `FERNET_KEY`.
 
-Install the `websockets` package if needed:
-
-```powershell
-python -m pip install websockets
-```
-
-Then test a connection:
-
-```powershell
-python -c "exec(\"import asyncio, websockets\\nasync def main():\\n    async with websockets.connect('ws://127.0.0.1:10000/ws'):\\n        print('connected')\\nasyncio.run(main())\")"
-```
-
-For the public tunnel, use:
+For production, prefer:
 
 ```text
-wss://chat.example.com/ws
+ENVIRONMENT=production
+ALLOWED_ORIGINS=https://www.securechat455.dev
 ```
 
 ## Security Notes
 
 - Passwords are hashed with Scrypt and per-user salts.
-- The browser passphrase is not stored in the account and is not sent to the server.
+- Chat passphrases are not stored in accounts and are not sent to the server.
 - Browser room messages and file payloads are encrypted with AES-GCM before leaving the client.
 - The server stores encrypted client-side envelopes and also applies Fernet encryption at rest.
 - Login attempts have basic temporary lockout protection.
+- Chat messages are rate-limited per user.
 - Message payloads, usernames, channel names, filenames, file extensions, and file sizes are validated server-side.
-- Do not commit `.env`, `accounts.json`, or `messages/`.
+- The backend is exposed through Cloudflare Tunnel, not direct public port forwarding.
+- Do not commit `.env`, `accounts.json`, `messages/`, tunnel credentials, or logs.
 - Do not log plaintext passwords, passphrases, encryption keys, or message contents.
 
 ## Backup Notes
 
-Back up these files/directories regularly:
+Back up these files/directories regularly from Jerome:
 
 ```text
-.env
-accounts.json
-messages/
+C:\Users\Admin\Endurance\.env
+C:\Users\Admin\Endurance\accounts.json
+C:\Users\Admin\Endurance\messages\
+C:\Users\Admin\.cloudflared\
 ```
 
-Keep the `.env` backup private. If you lose the Fernet key, existing server-side encrypted message history cannot be decrypted.
+Keep backups private. If the Fernet key is lost, server-side encrypted history cannot be decrypted.
 
 ## Storage
 
 The app currently uses JSON storage:
 
-- `accounts.json`
-- `messages/*.json`
+```text
+accounts.json
+messages/*.json
+```
 
-Writes are atomic and locked inside the Python process to reduce corruption risk. For heavier usage, migrate to SQLite later. SQLite would improve concurrency, indexing, and backups without requiring a large database server.
+Writes are atomic and locked inside the Python process to reduce corruption risk. For heavier usage, SQLite is the recommended next migration because it improves concurrency, indexing, and backups without requiring a larger database server.
 
-## Required Features
+## Troubleshooting
+
+If login hangs or WebSocket connection fails:
+
+1. Confirm backend health:
+
+```powershell
+Invoke-RestMethod "https://chat.securechat455.dev/health"
+```
+
+2. Confirm the frontend config:
+
+```javascript
+window.SECURECHAT_WS_URL = "wss://chat.securechat455.dev/ws";
+```
+
+3. Check Jerome scheduled tasks:
+
+```powershell
+schtasks /Query /TN "SecureChat Backend" /V /FO LIST
+schtasks /Query /TN "SecureChat Permanent Cloudflare Tunnel" /V /FO LIST
+```
+
+4. Check Jerome logs:
+
+```powershell
+dir C:\SecureChatLogs
+```
+
+5. Check browser DevTools Console for WebSocket errors.
+
+## Features
 
 - Real-time WebSocket messaging
-- Authentication
+- Account creation and login
 - Direct messages
 - Encrypted passphrase-based rooms
+- Online user list
+- Typing indicators
+- Emoji picker
+- Rich text formatting
 - File sharing
-- Presence and typing indicators
+- Client-side file validation
 - Basic rate limiting
 - Reconnect behavior
