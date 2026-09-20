@@ -330,16 +330,20 @@ function openAuthenticatedSocket(action, url, username, password, isReconnect = 
     setStatus(isReconnect ? "Reconnecting..." : "Connecting...");
     const socket = new WebSocket(url);
     state.socket = socket;
+    let authCompleted = false;
+    let expectedClose = false;
     const connectTimeoutId = window.setTimeout(() => {
         if (socket.readyState === WebSocket.CONNECTING) {
+            expectedClose = true;
             socket.close();
-            setStatus("Connection timed out. Check that config.js points to the Render /ws URL.", true);
+            setStatus("Connection timed out. Check that config.js points to the backend /ws URL.", true);
         }
     }, 10000);
     const authTimeoutId = window.setTimeout(() => {
         if (socket.readyState === WebSocket.OPEN) {
+            expectedClose = true;
             socket.close();
-            setStatus("Server connected but did not answer login. Check Render logs.", true);
+            setStatus("Server connected but did not answer login. Check backend logs.", true);
         }
     }, 15000);
 
@@ -354,8 +358,10 @@ function openAuthenticatedSocket(action, url, username, password, isReconnect = 
         const data = JSON.parse(event.data);
 
         if (data.status === "success") {
+            authCompleted = true;
             if (action === "create") {
                 setStatus("Account created. You can log in now.");
+                expectedClose = true;
                 socket.close();
                 return;
             }
@@ -371,6 +377,7 @@ function openAuthenticatedSocket(action, url, username, password, isReconnect = 
 
         if (data.status === "error") {
             setStatus(data.message || "Unable to connect.", true);
+            expectedClose = true;
             socket.close();
             return;
         }
@@ -411,15 +418,24 @@ function openAuthenticatedSocket(action, url, username, password, isReconnect = 
         window.clearTimeout(connectTimeoutId);
         window.clearTimeout(authTimeoutId);
         window.clearInterval(state.heartbeatId);
-        if (!els.chatSection.hidden) {
+        if (!expectedClose && !els.chatSection.hidden) {
             pushMessage({ sender: "SYSTEM", message: "Disconnected from server.", channel: state.currentChannel });
         }
-        scheduleReconnect();
+        if (!expectedClose) {
+            scheduleReconnect();
+        }
     });
 
     socket.addEventListener("error", () => {
         window.clearTimeout(connectTimeoutId);
         window.clearTimeout(authTimeoutId);
+        if (socket !== state.socket || expectedClose || authCompleted) {
+            return;
+        }
+        if (state.loggedIn) {
+            showLocalSystemMessage("Connection issue detected. Reconnecting if needed...");
+            return;
+        }
         setStatus("Could not connect to the WebSocket server.", true);
     });
 }
