@@ -2,6 +2,7 @@ __pycache__/
 accounts.json
 .env
 messages/
+uploads/
 
 # Local Codex/runtime dependency folders created while testing.
 .venv/

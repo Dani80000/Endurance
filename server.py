@@ -3,12 +3,28 @@ import json
 import time
 import re
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from collections import defaultdict
 import uvicorn
+import logging
 import accounts
 import connections
+from config import settings
 
 app = FastAPI()
+logging.basicConfig(
+    level=getattr(logging, settings.log_level, logging.INFO),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+logger = logging.getLogger("securechat")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.allowed_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 if not os.path.exists("messages"):
     os.makedirs("messages")
@@ -23,8 +39,8 @@ MIN_PASSWORD_LENGTH = 8
 MIN_USERNAME_LENGTH = 2
 MAX_USERNAME_LENGTH = 24
 MAX_MESSAGE_LENGTH = 4000
-MAX_FILE_DATA_LENGTH = 7_000_000
-MAX_E2EE_DATA_LENGTH = 7_000_000
+MAX_FILE_DATA_LENGTH = settings.max_upload_size
+MAX_E2EE_DATA_LENGTH = settings.max_upload_size
 MAX_FILENAME_LENGTH = 120
 login_attempts = defaultdict(list)
 USERNAME_RE = re.compile(r"^[a-z0-9_]{2,24}$")
@@ -44,6 +60,19 @@ def is_locked_out(ip: str) -> bool:
 
 def record_failed_attempt(ip: str):
     login_attempts[ip].append(time.time())
+
+
+def is_allowed_origin(origin: str | None) -> bool:
+    if not origin or "*" in settings.allowed_origins:
+        return True
+    return origin in settings.allowed_origins
+
+
+def get_client_ip(websocket: WebSocket) -> str:
+    forwarded_for = websocket.headers.get("x-forwarded-for")
+    if forwarded_for:
+        return forwarded_for.split(",", 1)[0].strip()
+    return websocket.client.host if websocket.client else "unknown"
 
 
 def validate_username(user_id: str) -> str | None:
@@ -258,13 +287,24 @@ async def websocket_endpoint_ws(websocket: WebSocket):
 
 
 async def handle_chat_websocket(websocket: WebSocket):
+    origin = websocket.headers.get("origin")
+    if not is_allowed_origin(origin):
+        logger.warning("Rejected WebSocket connection from origin=%s", origin)
+        await websocket.close(code=1008)
+        return
+
     await websocket.accept()
-    print("New client connected.")
+    ip = get_client_ip(websocket)
+    logger.info("WebSocket connected from client=%s", ip)
     current_user = None
-    ip = (websocket.client.host if websocket.client else websocket.headers.get("x-forwarded-for", "unknown"))
 
     try:
-        data = await websocket.receive_json()
+        try:
+            data = await websocket.receive_json()
+        except json.JSONDecodeError:
+            await websocket.send_json({"status": "error", "message": "Invalid login payload."})
+            return
+
         action = data.get("action", "login")
         user_id = data.get("user_id", "").strip().lower()
         password = data.get("password")
@@ -280,7 +320,7 @@ async def handle_chat_websocket(websocket: WebSocket):
             return
         
         if action == "create":
-            print(f"Creating account for: {user_id}")
+            logger.info("Account creation requested for user=%s", user_id)
             pw_hash = accounts.hash_password(password)
             if accounts.create_account(user_id, pw_hash):
                 await websocket.send_json({"status": "success", "message": "Account created on server."})
@@ -288,8 +328,9 @@ async def handle_chat_websocket(websocket: WebSocket):
                 await websocket.send_json({"status": "error", "message": "Account already exists."})
             return 
 
-        print(f"Login attempt: {user_id}")
+        logger.info("Login attempt for user=%s ip=%s", user_id, ip)
         if is_locked_out(ip):
+            logger.warning("Rejected locked-out login attempt for user=%s ip=%s", user_id, ip)
             await websocket.send_json({"status": "error", "message": "You have been locked out. Try again later."})
             return
         if connections.connect(user_id, password):
@@ -312,7 +353,12 @@ async def handle_chat_websocket(websocket: WebSocket):
 
             try:
                 while True:
-                    payload = await websocket.receive_json()
+                    try:
+                        payload = await websocket.receive_json()
+                    except json.JSONDecodeError:
+                        await send_validation_error(websocket, "Invalid message format.", active_channels.get(websocket, "General"))
+                        continue
+
                     action = payload.get("action", "send_message")
                     channel = normalize_channel_name(payload.get("channel", "General"))
                     payload["channel"] = channel
@@ -366,8 +412,12 @@ async def handle_chat_websocket(websocket: WebSocket):
                     
                     try:
                         connections.save_message_to_json(payload)
+                        if isinstance(payload.get("message"), dict) and payload["message"].get("type") == "file":
+                            logger.info("Stored file message for user=%s channel=%s", current_user, channel)
                     except Exception as e:
-                        print(f"Failed to save message: {e}")
+                        logger.exception("Failed to save message for user=%s channel=%s", current_user, channel)
+                        await send_validation_error(websocket, "Message could not be saved.", channel)
+                        continue
                     
                     if channel == "General":
                         await broadcast_to_channel(payload, channel)
@@ -379,7 +429,7 @@ async def handle_chat_websocket(websocket: WebSocket):
                         await broadcast_to_channel(payload, channel, current_user)
                             
             except WebSocketDisconnect:
-                print(f"{user_id} disconnected")
+                logger.info("WebSocket disconnected for user=%s", user_id)
                 if websocket in active_connections: del active_connections[websocket]
                 if websocket in active_channels: del active_channels[websocket]
                 if user_id in last_message_times:
@@ -389,6 +439,7 @@ async def handle_chat_websocket(websocket: WebSocket):
                 await broadcast_presence()
         else:
             record_failed_attempt(ip)
+            logger.warning("Failed login for user=%s ip=%s", user_id, ip)
             if is_locked_out(ip):
                 await websocket.send_json({"status": "error", "message": "Try again later."})
             else:
@@ -399,7 +450,11 @@ async def handle_chat_websocket(websocket: WebSocket):
          })
 
     except Exception as e:
-        print(f"Error: {e}")
+        logger.exception("Unhandled WebSocket error")
+        try:
+            await websocket.send_json({"status": "error", "message": "A server error occurred."})
+        except Exception:
+            pass
     finally:
         if websocket in active_connections:
             del active_connections[websocket]
@@ -408,5 +463,5 @@ async def handle_chat_websocket(websocket: WebSocket):
             await broadcast_presence()
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    logger.info("Starting SecureChat environment=%s host=%s port=%s", settings.environment, settings.host, settings.port)
+    uvicorn.run(app, host=settings.host, port=settings.port, proxy_headers=True)

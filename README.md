@@ -1,118 +1,228 @@
 # Secure-Chat
-Project to establish a secure messaging channel between multiple users.
+
+Secure-Chat is a Python/FastAPI WebSocket chat app with authentication, encrypted message storage, browser-side room encryption, direct messages, channels, presence, and file sharing.
 
 Authors: Dani Dimovski, Robby Loeffler, Adam Secrest
 
-## Hosted Architecture
-SecureChat is now split into two deployable pieces:
+## Architecture
 
-1. Python WebSocket backend (`server.py`)
-2. Static hosted browser client (`hosted/`)
+The project has two deployable pieces:
 
-This keeps the chat service compatible with Python hosting providers such as Render while still allowing the frontend to be uploaded to InfinityFree or any other static/PHP web host.
+1. Python backend: [server.py](server.py)
+2. Static browser client: [hosted/](hosted/)
 
-## Local Setup
-Install dependencies for local development:
+The backend can run on a home server behind Cloudflare Tunnel or a reverse proxy. The frontend can be served from the same domain as the backend or from a separate static host.
 
-```bash
-python -m pip install -r requirements.txt
-```
+## Local Development
 
-For backend-only hosting, install the smaller backend dependency set:
+Install backend dependencies:
 
-```bash
+```powershell
 python -m pip install -r requirements-backend.txt
 ```
 
-Create a `.env` file:
+Create a local `.env` from the template:
 
-```bash
-MESSAGE_ENCRYPTION_KEY=your_fernet_key_here
-SECURECHAT_WS_URL=ws://localhost:10000/ws
+```powershell
+Copy-Item .env.example .env
 ```
 
 Generate a Fernet key:
 
-```bash
+```powershell
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Edit `.env` and set:
+
+```text
+FERNET_KEY=paste_generated_fernet_key_here
+SECRET_KEY=replace_with_a_long_random_secret
+HOST=127.0.0.1
+PORT=10000
+ENVIRONMENT=development
+ALLOWED_ORIGINS=*
 ```
 
 Run the backend:
 
-```bash
-uvicorn server:app --host 0.0.0.0 --port 10000
+```powershell
+python -m uvicorn server:app --host 127.0.0.1 --port 10000
 ```
 
-Open `hosted/index.html` in two browser windows to test two clients.
+Open [hosted/index.html](hosted/index.html) in two browser windows to test two clients.
 
-## Deploying the Backend
-Render can deploy the backend directly using `render.yaml`. It installs `requirements-backend.txt`, so the hosted server does not need the desktop Eel client dependencies.
+## Production Startup
 
-Required environment variable:
+For a home server behind Cloudflare Tunnel or a reverse proxy, bind the app locally:
 
-```bash
-MESSAGE_ENCRYPTION_KEY=<fernet key>
+```powershell
+python -m uvicorn server:app --host 127.0.0.1 --port 10000 --proxy-headers --forwarded-allow-ips="*"
 ```
 
-Start command:
+Use `127.0.0.1` when Cloudflare Tunnel or your reverse proxy runs on the same machine. This avoids exposing the app directly to your LAN or the public internet.
 
-```bash
-uvicorn server:app --host 0.0.0.0 --port $PORT
-```
+If another machine on your LAN must proxy to it, use your server's LAN IP or `0.0.0.0`, then firewall it carefully.
 
-Health check:
+## Environment Variables
 
-```text
-/health
-```
+| Variable | Purpose |
+| --- | --- |
+| `ENVIRONMENT` | `development` or `production`. |
+| `HOST` | Bind address used by `python server.py`. |
+| `PORT` | Backend port, usually `10000`. |
+| `LOG_LEVEL` | Python logging level, for example `INFO` or `WARNING`. |
+| `SECRET_KEY` | Reserved app secret for production features. Use a long random value. |
+| `FERNET_KEY` | Required Fernet key for server-side encrypted storage. |
+| `ALLOWED_ORIGINS` | Comma-separated browser origins allowed to use the backend. |
+| `UPLOAD_DIR` | Reserved upload directory setting. Files are currently stored as encrypted JSON payloads. |
+| `MAX_UPLOAD_SIZE` | Maximum WebSocket file/encrypted payload size. |
 
-## Deploying the Frontend
-Upload the files inside `hosted/` to InfinityFree or another static web host.
+Older deployments that still use `MESSAGE_ENCRYPTION_KEY` are supported, but new installs should use `FERNET_KEY`.
 
-Set the WebSocket backend URL in `hosted/config.js`:
+## Frontend Configuration
+
+If the frontend is served from the same public domain as the backend, leave [hosted/config.js](hosted/config.js) blank:
 
 ```javascript
-window.SECURECHAT_WS_URL = "wss://your-python-backend.example.com/ws";
+window.SECURECHAT_WS_URL = "";
 ```
 
-Use `wss://` for hosted HTTPS sites. Browsers usually block insecure `ws://` connections from HTTPS pages.
+The browser will automatically use:
 
-## Security Features
+```text
+wss://your-domain.example/ws
+```
+
+If the frontend is hosted somewhere else, set:
+
+```javascript
+window.SECURECHAT_WS_URL = "wss://your-backend-domain.example/ws";
+```
+
+## Cloudflare Tunnel Overview
+
+Recommended setup:
+
+1. Run Secure-Chat on the server at `http://127.0.0.1:10000`.
+2. Create a Cloudflare Tunnel public hostname such as `chat.example.com`.
+3. Point the tunnel service to:
+
+```text
+http://127.0.0.1:10000
+```
+
+Cloudflare handles HTTPS/WSS publicly. Uvicorn receives local HTTP/WebSocket traffic from the tunnel.
+
+## Windows Continuous Startup
+
+A simple Windows option is Task Scheduler:
+
+1. Open Task Scheduler.
+2. Create Task.
+3. Trigger: At startup or At log on.
+4. Action: Start a program.
+5. Program:
+
+```text
+python
+```
+
+6. Arguments:
+
+```text
+-m uvicorn server:app --host 127.0.0.1 --port 10000 --proxy-headers --forwarded-allow-ips="*"
+```
+
+7. Start in:
+
+```text
+C:\path\to\Endurance
+```
+
+For a more service-like setup, NSSM also works well with the same command.
+
+## Health Check
+
+Local:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:10000/health
+```
+
+Expected:
+
+```json
+{
+  "status": "ok"
+}
+```
+
+Public tunnel:
+
+```powershell
+Invoke-RestMethod https://chat.example.com/health
+```
+
+## WebSocket Test
+
+Install the `websockets` package if needed:
+
+```powershell
+python -m pip install websockets
+```
+
+Then test a connection:
+
+```powershell
+python -c "exec(\"import asyncio, websockets\\nasync def main():\\n    async with websockets.connect('ws://127.0.0.1:10000/ws'):\\n        print('connected')\\nasyncio.run(main())\")"
+```
+
+For the public tunnel, use:
+
+```text
+wss://chat.example.com/ws
+```
+
+## Security Notes
+
 - Passwords are hashed with Scrypt and per-user salts.
-- Hosted browser messages and uploaded file data are encrypted with AES-GCM before leaving the client when users share the same chat passphrase.
-- Stored messages and uploaded file data are also encrypted with Fernet before being saved.
-- WebSocket login attempts are rate-limited by IP.
-- Chat messages are rate-limited per user.
-- DM channel names are normalized so both users share the same private channel.
-- Stored channel filenames are sanitized before writing message history.
-- Account creation and login enforce username format and minimum password length.
-- WebSocket payloads are validated server-side for allowed actions, channels, message length, file names, and file data size before storage or broadcast.
+- The browser passphrase is not stored in the account and is not sent to the server.
+- Browser room messages and file payloads are encrypted with AES-GCM before leaving the client.
+- The server stores encrypted client-side envelopes and also applies Fernet encryption at rest.
+- Login attempts have basic temporary lockout protection.
+- Message payloads, usernames, channel names, filenames, file extensions, and file sizes are validated server-side.
+- Do not commit `.env`, `accounts.json`, or `messages/`.
+- Do not log plaintext passwords, passphrases, encryption keys, or message contents.
 
-Note: users must enter the same chat encryption passphrase to join the same encrypted room and decrypt each other's hosted browser room messages/files. The passphrase is not stored in the account or sent to the server. The browser derives a room ID from the passphrase without sending the passphrase itself. Users can leave one encrypted room and enter a different passphrase to join another room with the same account. Direct messages are routed globally between active users, but the message contents are still encrypted with the sender's current passphrase and can only be decrypted by a recipient using that same passphrase. The Python server stores and relays encrypted client-side envelopes, then applies Fernet encryption at rest as a second layer.
+## Backup Notes
 
-## Reliability and Presence
-- The hosted client sends heartbeat pings to keep WebSocket connections active.
-- The server replies with pong messages and broadcasts online user presence.
-- The hosted client displays online users and typing indicators.
-- The hosted client attempts automatic reconnects after unexpected disconnects.
-- The hosted client performs basic file-upload validation before transmission, including size limits, blocked executable/script extensions, suspicious double-extension checks, and EICAR test-string detection.
+Back up these files/directories regularly:
 
-## Deliverables
-A video presentation showing the following:
-An explanation of the functionality of the programs
-Present two clients (simulated on separate browser windows or systems) connected to the WebSocket server.
-Executable(s)
-Client (if through the browser, you must explain this access through documentation)
-Server (required)
-Documentation
-User Guide
-Changelog (Easiest through Github)
-Document each edit made to the program
-Show various versions that represent multiple iterations
+```text
+.env
+accounts.json
+messages/
+```
 
-## Requirements
-- Real Time Messaging - Appears instantly for all connected users
-- Secure connection - All connections over a websocket
-- Authentication - Username and Password
-- Rate Limiting - Prevent server spam
-- Connection handling - Proper join / disconnect. Reconnect automatically upon user fail
+Keep the `.env` backup private. If you lose the Fernet key, existing server-side encrypted message history cannot be decrypted.
+
+## Storage
+
+The app currently uses JSON storage:
+
+- `accounts.json`
+- `messages/*.json`
+
+Writes are atomic and locked inside the Python process to reduce corruption risk. For heavier usage, migrate to SQLite later. SQLite would improve concurrency, indexing, and backups without requiring a large database server.
+
+## Required Features
+
+- Real-time WebSocket messaging
+- Authentication
+- Direct messages
+- Encrypted passphrase-based rooms
+- File sharing
+- Presence and typing indicators
+- Basic rate limiting
+- Reconnect behavior

@@ -3,6 +3,7 @@ import os
 import re
 import accounts
 from server_crypto import encrypt_message, decrypt_message
+from storage_utils import read_json, update_json
 
 def connect(user_id, password, channel="General", receiver_id=None):
     if accounts.authenticate_account(user_id, password):
@@ -16,14 +17,6 @@ def save_message_to_json(payload):
     channel = payload.get("channel", "General")
     safe_channel = safe_channel_name(channel)
     filename = f"messages/{safe_channel}.json"
-    
-    history = []
-    if os.path.exists(filename):
-        try:
-            with open(filename, "r", encoding="utf-8") as file:
-                history = json.load(file)
-        except json.JSONDecodeError:
-            history = []
 
     payload_to_store = dict(payload)
 
@@ -43,55 +36,47 @@ def save_message_to_json(payload):
         payload_to_store["encrypted"] = True
         payload_to_store["e2ee"] = True
 
-    history.append(payload_to_store)
+    def append_message(history):
+        history.append(payload_to_store)
 
-    with open(filename, "w", encoding="utf-8") as file:
-        json.dump(history, file, indent=4)
+    update_json(filename, [], append_message)
 
 def join_channel(user_id, channel):
     safe_channel = safe_channel_name(channel)
     filename = f"messages/{safe_channel}.json"
 
-    if os.path.exists(filename):
-        try:
-            with open(filename, "r", encoding="utf-8") as file:
-                history = json.load(file)
+    history = read_json(filename, [])
+    decrypted_history = []
 
-            decrypted_history = []
-            for msg in history:
-                msg_copy = dict(msg)
+    for msg in history:
+        msg_copy = dict(msg)
 
-                if msg_copy.get("encrypted") is True:
-                    stored_message = msg_copy.get("message", "")
-                    if msg_copy.get("e2ee") is True and isinstance(stored_message, str) and stored_message.strip():
-                        try:
-                            msg_copy["message"] = json.loads(decrypt_message(stored_message))
-                        except Exception:
-                            msg_copy["message"] = "[Unable to decrypt stored encrypted envelope]"
-                    elif isinstance(stored_message, str) and stored_message.strip():
-                        try:
-                            msg_copy["message"] = decrypt_message(stored_message)
-                        except Exception:
-                            msg_copy["message"] = "[Unable to decrypt stored message]"
-                    elif isinstance(stored_message, dict) and stored_message.get("type") == "file":
-                        encrypted_file_data = stored_message.get("data", "")
-                        if stored_message.get("encrypted_data") is True and isinstance(encrypted_file_data, str) and encrypted_file_data.strip():
-                            msg_copy["message"] = dict(stored_message)
-                            try:
-                                msg_copy["message"]["data"] = decrypt_message(encrypted_file_data)
-                                msg_copy["message"].pop("encrypted_data", None)
-                            except Exception:
-                                msg_copy["message"]["data"] = ""
-                                msg_copy["message"]["download_error"] = "Unable to decrypt stored file"
+        if msg_copy.get("encrypted") is True:
+            stored_message = msg_copy.get("message", "")
+            if msg_copy.get("e2ee") is True and isinstance(stored_message, str) and stored_message.strip():
+                try:
+                    msg_copy["message"] = json.loads(decrypt_message(stored_message))
+                except Exception:
+                    msg_copy["message"] = "[Unable to decrypt stored encrypted envelope]"
+            elif isinstance(stored_message, str) and stored_message.strip():
+                try:
+                    msg_copy["message"] = decrypt_message(stored_message)
+                except Exception:
+                    msg_copy["message"] = "[Unable to decrypt stored message]"
+            elif isinstance(stored_message, dict) and stored_message.get("type") == "file":
+                encrypted_file_data = stored_message.get("data", "")
+                if stored_message.get("encrypted_data") is True and isinstance(encrypted_file_data, str) and encrypted_file_data.strip():
+                    msg_copy["message"] = dict(stored_message)
+                    try:
+                        msg_copy["message"]["data"] = decrypt_message(encrypted_file_data)
+                        msg_copy["message"].pop("encrypted_data", None)
+                    except Exception:
+                        msg_copy["message"]["data"] = ""
+                        msg_copy["message"]["download_error"] = "Unable to decrypt stored file"
 
-                decrypted_history.append(msg_copy)
+        decrypted_history.append(msg_copy)
 
-            return decrypted_history
-
-        except json.JSONDecodeError:
-            return []
-
-    return []
+    return decrypted_history
 
 def safe_channel_name(channel):
     channel = (channel or "General").strip()

@@ -136,7 +136,12 @@ function getWebSocketUrl() {
         return window.SECURECHAT_WS_URL;
     }
 
-    return "wss://secure-chat-bs75.onrender.com/ws";
+    if (window.location.protocol === "file:" || !window.location.host) {
+        return "ws://127.0.0.1:10000/ws";
+    }
+
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${protocol}//${window.location.host}/ws`;
 }
 
 function setStatus(message, isError = false) {

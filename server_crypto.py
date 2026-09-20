@@ -1,12 +1,9 @@
-import os
-from dotenv import load_dotenv
 from cryptography.fernet import Fernet
+from config import settings
 
-load_dotenv()
-
-key = os.getenv("MESSAGE_ENCRYPTION_KEY")
+key = settings.fernet_key
 if not key:
-    raise ValueError("MESSAGE_ENCRYPTION_KEY is not set in .env")
+    raise ValueError("FERNET_KEY is not set in .env")
 
 cipher = Fernet(key.encode("utf-8"))
 
